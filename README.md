@@ -1,5 +1,3 @@
-Voici le modèle de `README.md` complet, ultra-détaillé et spécialement adapté à votre équipe qui apprend React Native. Tu peux directement le copier-coller dans ton dépôt GitHub.
-
 ---
 
 # 📱 TikTokCloneApp
