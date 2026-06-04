@@ -1,0 +1,75 @@
+name: Android Build (Debug APK)
+
+on:
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  build-debug-apk:
+    name: Build debug APK
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Setup Java 21 (Temurin)
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 21
+          cache: gradle
+
+      - name: Setup Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Install Android SDK packages (platform, build-tools, NDK, CMake)
+        run: |
+          yes | sdkmanager --licenses > /dev/null || true
+          sdkmanager \
+            "platform-tools" \
+            "platforms;android-36" \
+            "build-tools;36.1.0" \
+            "ndk;27.0.12077973" \
+            "cmake;3.22.1"
+
+      # The committed android/gradle.properties pins a Windows-only JDK path
+      # (org.gradle.java.home / installations.paths) and a sdkDownload guard
+      # meant for the contributor's limited-bandwidth local machine.
+      # On a Linux CI runner those Windows paths do not exist and would break
+      # the build, so we neutralize them here AT BUILD TIME ONLY (never committed).
+      # Gradle then falls back to JAVA_HOME provided by setup-java (Java 21),
+      # and AGP is allowed to fetch any SDK bits the runner is missing.
+      - name: Neutralize Windows-only Gradle config (CI runner only)
+        run: |
+          cd android
+          sed -i 's/^org\.gradle\.java\.home/#&/' gradle.properties
+          sed -i 's/^org\.gradle\.java\.installations\.paths/#&/' gradle.properties
+          sed -i 's/^org\.gradle\.java\.installations\.auto-download/#&/' gradle.properties
+          sed -i 's/^org\.gradle\.java\.installations\.auto-detect/#&/' gradle.properties
+          sed -i 's/^android\.builder\.sdkDownload/#&/' gradle.properties
+          echo "----- gradle.properties effectif sur le runner -----"
+          cat gradle.properties
+
+      - name: Install npm dependencies (runs postinstall -> patch-package)
+        run: npm ci
+
+      - name: Build debug APK
+        run: |
+          cd android
+          chmod +x gradlew
+          ./gradlew assembleDebug --no-daemon --stacktrace
+
+      - name: Upload debug APK artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: app-debug-apk
+          path: android/app/build/outputs/apk/debug/*.apk
+          if-no-files-found: error
+          retention-days: 14
