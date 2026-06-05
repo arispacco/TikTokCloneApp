@@ -45,7 +45,7 @@ export default function FeedScreen() {
   };
 
   // 3. RENDU D'UNE VIDÉO UNIQUE (L'ÉLÉMENT DE LA LISTE)
-  const renderVideoItem = ({ item, index }: { item: Post; index: number }) => {
+  const renderVideoItem = ({ item }: { item: Post }) => {
     return (
       <View style={styles.videoCard}>
         
@@ -107,7 +107,7 @@ const styles = StyleSheet.create({
   centered: { flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: '#000000' },
   loadingText: { color: 'white', fontSize: 16 },
   videoCard: { width: width, height: height, justifyContent: 'center', alignItems: 'center', position: 'relative' },
-  videoPlaceholder: { ...StyleSheet.absoluteFillObject, backgroundColor: '#121212', justifyContent: 'center', alignItems: 'center' },
+  videoPlaceholder: { ...StyleSheet.absoluteFill, backgroundColor: '#121212', justifyContent: 'center', alignItems: 'center' },
   videoText: { color: '#555', fontSize: 16 },
   bottomOverlay: { position: 'absolute', bottom: 100, left: 15, width: width * 0.75 },
   username: { color: 'white', fontWeight: 'bold', fontSize: 16, marginBottom: 5 },
