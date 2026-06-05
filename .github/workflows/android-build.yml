@@ -1,12 +1,12 @@
-name: Android Build (Debug APK)
+name: Android Build (Debug & Release APK)
 
 on:
   pull_request:
   workflow_dispatch:
 
 jobs:
-  build-debug-apk:
-    name: Build debug APK
+  build-apks:
+    name: Build Debug and Release APKs
     runs-on: ubuntu-latest
 
     steps:
@@ -39,13 +39,8 @@ jobs:
             "ndk;27.0.12077973" \
             "cmake;3.22.1"
 
-      # The committed android/gradle.properties pins a Windows-only JDK path
-      # (org.gradle.java.home / installations.paths) and a sdkDownload guard
-      # meant for the contributor's limited-bandwidth local machine.
-      # On a Linux CI runner those Windows paths do not exist and would break
-      # the build, so we neutralize them here AT BUILD TIME ONLY (never committed).
-      # Gradle then falls back to JAVA_HOME provided by setup-java (Java 21),
-      # and AGP is allowed to fetch any SDK bits the runner is missing.
+      # Ce bloc neutralise tes configurations Windows locales pour que le serveur Linux de GitHub 
+      # utilise ses propres variables d'environnement sans planter.
       - name: Neutralize Windows-only Gradle config (CI runner only)
         run: |
           cd android
@@ -60,16 +55,34 @@ jobs:
       - name: Install npm dependencies (runs postinstall -> patch-package)
         run: npm ci
 
+      # --- ÉTAPE DE COMPILATION 1 : VERSION DEBUG ---
       - name: Build debug APK
         run: |
           cd android
           chmod +x gradlew
           ./gradlew assembleDebug --no-daemon --stacktrace
 
+      # --- ÉTAPE DE COMPILATION 2 : VERSION RELEASE (AJOUTÉE) ---
+      - name: Build release APK
+        run: |
+          cd android
+          chmod +x gradlew
+          ./gradlew assembleRelease --no-daemon --stacktrace
+
+      # --- EXPORTATION 1 : SÉCURISER L'APK DEBUG ---
       - name: Upload debug APK artifact
         uses: actions/upload-artifact@v4
         with:
           name: app-debug-apk
           path: android/app/build/outputs/apk/debug/*.apk
+          if-no-files-found: error
+          retention-days: 14
+
+      # --- EXPORTATION 2 : SÉCURISER L'APK RELEASE (AJOUTÉE) ---
+      - name: Upload release APK artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: app-release-apk
+          path: android/app/build/outputs/apk/release/*.apk
           if-no-files-found: error
           retention-days: 14
