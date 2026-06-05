@@ -13,14 +13,20 @@ react {
 }
 
 /**
- * Set this to true to Run Proguard on Release builds to minify the Java bytecode.
- */
-def enableProguardInReleaseBuilds = false
-
-/**
  * The preferred build flavor of JavaScriptCore (JSC)
  */
 def jscFlavor = 'io.github.react-native-community:jsc-android:2026004.+'
+
+/**
+ * versionCode auto-incrémenté en CI à partir du numéro de run GitHub
+ * (System.getenv("GITHUB_RUN_NUMBER")). Fallback à 1 en local / hors CI,
+ * pour que chaque build CI produise un versionCode strictement croissant
+ * (exigence du Play Store) sans intervention manuelle.
+ */
+def resolveVersionCode() {
+    def runNumber = System.getenv("GITHUB_RUN_NUMBER")
+    return (runNumber != null && runNumber.isInteger()) ? runNumber.toInteger() : 1
+}
 
 android {
     ndkVersion rootProject.ext.ndkVersion
@@ -32,7 +38,7 @@ android {
         applicationId "com.tiktokclone"
         minSdkVersion rootProject.ext.minSdkVersion
         targetSdkVersion rootProject.ext.targetSdkVersion
-        versionCode 1
+        versionCode resolveVersionCode()
         versionName "1.0"
     }
 
@@ -55,17 +61,46 @@ android {
             keyAlias 'androiddebugkey'
             keyPassword 'android'
         }
+        // Signing de PRODUCTION. Tous les secrets proviennent de VARIABLES
+        // D'ENVIRONNEMENT (injectées par la CI depuis les secrets GitHub) :
+        //   RELEASE_STORE_FILE     -> chemin du fichier keystore (.jks/.keystore)
+        //   RELEASE_STORE_PASSWORD -> mot de passe du keystore
+        //   RELEASE_KEY_ALIAS      -> alias de la clé
+        //   RELEASE_KEY_PASSWORD   -> mot de passe de la clé
+        // Aucun secret n'est jamais committé.
+        //
+        // FALLBACK : si RELEASE_STORE_FILE n'est pas défini (build local ou PR
+        // sans secrets), on retombe sur la debug.keystore pour que le build
+        // release reste fonctionnel et signé (clé debug) sans bloquer personne.
+        release {
+            def releaseStoreFile = System.getenv("RELEASE_STORE_FILE")
+            if (releaseStoreFile != null && !releaseStoreFile.trim().isEmpty()) {
+                storeFile file(releaseStoreFile)
+                storePassword System.getenv("RELEASE_STORE_PASSWORD")
+                keyAlias System.getenv("RELEASE_KEY_ALIAS")
+                keyPassword System.getenv("RELEASE_KEY_PASSWORD")
+            } else {
+                // Pas de secrets : signature debug pour ne pas casser le build.
+                logger.warn("RELEASE_STORE_FILE absent : signature release via debug.keystore (build non distribuable).")
+                storeFile file('debug.keystore')
+                storePassword 'android'
+                keyAlias 'androiddebugkey'
+                keyPassword 'android'
+            }
+        }
     }
     buildTypes {
         debug {
             signingConfig signingConfigs.debug
         }
         release {
-            // Caution! In production, you need to generate your own keystore file.
-            // see https://reactnative.dev/docs/signed-apk-android.
-            signingConfig signingConfigs.debug
-            minifyEnabled enableProguardInReleaseBuilds
-            proguardFiles getDefaultProguardFile("proguard-android.txt"), "proguard-rules.pro"
+            signingConfig signingConfigs.release
+            // Minification + suppression des ressources inutilisées en release.
+            // Les règles ProGuard (proguard-rules.pro) protègent RNFirebase,
+            // Hermes et la nouvelle architecture RN contre l'élagage agressif.
+            minifyEnabled true
+            shrinkResources true
+            proguardFiles getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro"
         }
     }
 }
