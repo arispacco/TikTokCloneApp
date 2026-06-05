@@ -1,10 +1,10 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, TextInput, ActivityIndicator, Dimensions } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, TextInput, ActivityIndicator, Dimensions, Alert } from 'react-native';
 import { Camera, useCameraDevice } from 'react-native-vision-camera';
 import { storageService } from '../services/storageService';
 import firestore from '@react-native-firebase/firestore';
 
-const { width, height } = Dimensions.get('window');
+const { width } = Dimensions.get('window');
 
 export default function CameraScreen() {
   const cameraRef = useRef<Camera>(null);
@@ -78,11 +78,11 @@ export default function CameraScreen() {
         // Étape D : Nettoyage de l'interface après succès
         setVideoLocalPath(null);
         setDescription('');
-        alert("Vidéo publiée avec succès !");
+        Alert.alert("Vidéo publiée avec succès !");
       }
     } catch (error) {
       console.error("Erreur lors de la publication :", error);
-      alert("Échec de la publication.");
+      Alert.alert("Échec de la publication.");
     } finally {
       setIsUploading(false);
     }
