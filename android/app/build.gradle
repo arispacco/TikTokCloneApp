@@ -36,13 +36,16 @@ android {
         versionName "1.0"
     }
 
-    // On force l'utilisation de Java 21
+    // Cible bytecode alignee Java/Kotlin sur 17 (convention React Native 0.85).
+    // Note : le JDK qui EXECUTE Gradle reste Java 21 (JBR en local, Temurin 21 en CI) ;
+    // seule la cible de compilation du module :app est 17, pour eviter le conflit
+    // "Inconsistent JVM-target compatibility" entre Java (17) et Kotlin.
     compileOptions {
-        sourceCompatibility JavaVersion.VERSION_21
-        targetCompatibility JavaVersion.VERSION_21
+        sourceCompatibility JavaVersion.VERSION_17
+        targetCompatibility JavaVersion.VERSION_17
     }
     kotlinOptions {
-        jvmTarget = '21'
+        jvmTarget = '17'
     }
 
     signingConfigs {
