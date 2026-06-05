@@ -1,0 +1,78 @@
+rules_version = '2';
+
+// Règles de sécurité Firestore — clone TikTok.
+//
+// Elles sont volontairement STRICTES mais calées EXACTEMENT sur l'implémentation
+// du client (voir src/services/authService.ts et src/services/postService.ts) :
+//  - users/{uid}            : profil créé à l'inscription via doc(uid).set(...)
+//  - posts/{postId}         : créé via postRef.set(post) avec post.userId == auteur
+//  - posts/{postId}/likes/{userId} : like écrit/supprimé par transaction toggleLike,
+//                                    qui met aussi à jour posts/{postId}.likesCount (±1)
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isOwner(uid) {
+      return isSignedIn() && request.auth.uid == uid;
+    }
+
+    // ---------------------------------------------------------------------
+    // Profils utilisateurs : users/{uid}
+    // Le document est créé à l'inscription avec doc(uid) (cf. authService.register).
+    // Lecture autorisée à tout utilisateur connecté ; écriture réservée au propriétaire.
+    // ---------------------------------------------------------------------
+    match /users/{userId} {
+      allow read: if isSignedIn();
+      allow create, update, delete: if isOwner(userId);
+    }
+
+    // ---------------------------------------------------------------------
+    // Posts : posts/{postId}
+    // Lecture si connecté (le feed fait orderBy('createdAt').limit(10)).
+    // Création : uniquement par l'auteur, qui doit s'auto-déclarer (userId == uid).
+    // Suppression : par l'auteur du post.
+    // Mise à jour : UNIQUEMENT le compteur likesCount (±1), pour coller au flux
+    //   transactionnel toggleLike. Toute autre modification est refusée (sinon
+    //   n'importe quel utilisateur connecté pourrait altérer le post d'autrui).
+    // ---------------------------------------------------------------------
+    match /posts/{postId} {
+      allow read: if isSignedIn();
+
+      allow create: if isSignedIn()
+        && request.resource.data.userId == request.auth.uid;
+
+      allow delete: if isSignedIn()
+        && resource.data.userId == request.auth.uid;
+
+      // toggleLike (transaction) modifie seulement likesCount, de +1 ou -1.
+      // On tolère un delta dans [-1, +1] pour couvrir le cas Math.max(0, n-1)
+      // quand n vaut déjà 0 (delta 0), sans jamais autoriser d'autre champ.
+      allow update: if isSignedIn()
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['likesCount'])
+        && request.resource.data.likesCount is int
+        && request.resource.data.likesCount >= resource.data.likesCount - 1
+        && request.resource.data.likesCount <= resource.data.likesCount + 1
+        && request.resource.data.likesCount >= 0;
+
+      // -------------------------------------------------------------------
+      // Likes : posts/{postId}/likes/{userId}
+      // L'ID du document EST l'uid de l'utilisateur (cf. likeRef = ...doc(userId)).
+      // Le document contient { userId, createdAt }. Un utilisateur ne peut
+      // créer / supprimer QUE son propre like.
+      // -------------------------------------------------------------------
+      match /likes/{likeUserId} {
+        allow read: if isSignedIn();
+
+        allow create: if isSignedIn()
+          && likeUserId == request.auth.uid
+          && request.resource.data.userId == request.auth.uid;
+
+        allow delete: if isSignedIn()
+          && likeUserId == request.auth.uid;
+      }
+    }
+  }
+}
