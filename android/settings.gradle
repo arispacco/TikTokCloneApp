@@ -9,5 +9,6 @@ plugins {
 extensions.configure(com.facebook.react.ReactSettingsExtension){ ex -> ex.autolinkLibrariesFromCommand() }
 rootProject.name = 'TikTokClone'
 include ':app'
-// Note : le gradle-plugin React Native est déjà inclus via pluginManagement
-// (includeBuild en haut de ce fichier). On évite ici le includeBuild en double.
+// Nécessaire aussi hors pluginManagement pour la résolution des dépendances
+// buildscript classpath (AGP / Kotlin / react-native-gradle-plugin) en CI.
+includeBuild('../node_modules/@react-native/gradle-plugin')
