@@ -11,6 +11,7 @@ import {
 } from 'react-native';
 import auth from '@react-native-firebase/auth';
 import { useIsFocused } from '@react-navigation/native';
+import { Heart, MessageCircle } from 'lucide-react-native';
 import { postService } from '../services/postService';
 import { Post } from '../shared/contracts';
 import { getErrorMessage, logger } from '../utils/logger';
@@ -112,7 +113,13 @@ export default function FeedScreen(): React.JSX.Element {
               accessibilityRole="button"
               accessibilityLabel={`Aimer la vidéo, ${item.likesCount} j'aime`}
             >
-              <Text style={styles.actionIcon}>❤️</Text>
+              <Heart
+                color="#ffffff"
+                fill="#ffffff"
+                size={38}
+                strokeWidth={2.4}
+                style={styles.actionIcon}
+              />
               <Text style={styles.actionLabel}>{item.likesCount}</Text>
             </TouchableOpacity>
 
@@ -122,7 +129,13 @@ export default function FeedScreen(): React.JSX.Element {
               accessibilityRole="button"
               accessibilityLabel="Voir les commentaires"
             >
-              <Text style={styles.actionIcon}>💬</Text>
+              <MessageCircle
+                color="#ffffff"
+                fill="#ffffff"
+                size={36}
+                strokeWidth={2.4}
+                style={styles.actionIcon}
+              />
               <Text style={styles.actionLabel}>{item.commentsCount}</Text>
             </TouchableOpacity>
           </View>
@@ -232,6 +245,6 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   actionButton: { alignItems: 'center', marginBottom: 20 },
-  actionIcon: { fontSize: 35, marginBottom: 5 },
+  actionIcon: { marginBottom: 5 },
   actionLabel: { color: 'white', fontSize: 12, fontWeight: 'bold' },
 });

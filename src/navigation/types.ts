@@ -7,5 +7,8 @@ export type AuthStackParamList = {
 /** Onglets principaux (utilisateur connecté). */
 export type MainTabsParamList = {
   Home: undefined;
+  Friends: undefined;
   Create: undefined;
+  Messages: undefined;
+  Profile: undefined;
 };
