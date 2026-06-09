@@ -31,6 +31,7 @@ export default function FeedScreen(): React.JSX.Element {
   const [loading, setLoading] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
   const [activePostId, setActivePostId] = useState<string | null>(null);
+  const [activeIndex, setActiveIndex] = useState<number>(0);
   const [isCommentModalVisible, setIsCommentModalVisible] = useState<boolean>(false);
   const [selectedPostIdForComment, setSelectedPostIdForComment] = useState<string | null>(null);
 
@@ -59,8 +60,12 @@ export default function FeedScreen(): React.JSX.Element {
   const onViewableItemsChanged = useRef(
     ({ viewableItems }: { viewableItems: ViewToken[] }) => {
       if (viewableItems.length > 0) {
-        const firstVisible = viewableItems[0].item as Post;
-        setActivePostId(firstVisible.id);
+        const firstVisible = viewableItems[0];
+        const item = firstVisible.item as Post;
+        setActivePostId(item.id);
+        if (typeof firstVisible.index === 'number') {
+          setActiveIndex(firstVisible.index);
+        }
       }
     },
   ).current;
@@ -97,15 +102,20 @@ export default function FeedScreen(): React.JSX.Element {
   }, []);
 
   const renderVideoItem = useCallback(
-    ({ item }: { item: Post }) => {
+    ({ item, index }: { item: Post; index: number }) => {
       const creatorSuffix = item.userId.substring(0, 5);
       const username = `utilisateur_${creatorSuffix}`;
+
+      // On ne monte le composant Video que si l'item est visible ou juste à côté (index ± 1)
+      // Cela permet de précharger la vidéo suivante tout en libérant la RAM des vidéos lointaines.
+      const shouldRender = Math.abs(index - activeIndex) <= 1;
 
       return (
         <View style={styles.videoCard}>
           <VideoPlayer
             videoUrl={item.videoUrl}
             isActive={isFocused && item.id === activePostId}
+            shouldRender={shouldRender}
           />
 
           <View style={styles.topOverlay}>
@@ -201,6 +211,14 @@ export default function FeedScreen(): React.JSX.Element {
         keyExtractor={item => item.id}
         pagingEnabled={true}
         windowSize={3}
+        initialNumToRender={2}
+        maxToRenderPerBatch={2}
+        removeClippedSubviews={true}
+        getItemLayout={(_, index) => ({
+          length: FEED_ITEM_HEIGHT,
+          offset: FEED_ITEM_HEIGHT * index,
+          index,
+        })}
         snapToInterval={FEED_ITEM_HEIGHT}
         snapToAlignment="start"
         decelerationRate="fast"
