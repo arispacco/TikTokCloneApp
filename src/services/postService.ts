@@ -1,6 +1,6 @@
 import firestore from '@react-native-firebase/firestore';
 import { storageService } from './storageService';
-import { CreatePostInput, Post } from '../shared/contracts';
+import { Comment, CreatePostInput, Post } from '../shared/contracts';
 import { getErrorMessage, logger } from '../utils/logger';
 
 export interface ToggleLikeResult {
@@ -147,6 +147,63 @@ export const postService = {
     } catch (error: unknown) {
       logger.error('Erreur lors du toggleLike :', error);
       return { success: false, liked: false };
+    }
+  },
+
+  /**
+   * Récupère les commentaires d'une vidéo spécifique.
+   */
+  getComments: async (postId: string): Promise<Comment[]> => {
+    const snapshot = await firestore()
+      .collection('posts')
+      .doc(postId)
+      .collection('comments')
+      .orderBy('createdAt', 'desc')
+      .get();
+
+    return snapshot.docs.map(
+      doc =>
+        ({
+          id: doc.id,
+          ...doc.data(),
+        } as Comment),
+    );
+  },
+
+  /**
+   * Ajoute un commentaire sur une vidéo.
+   */
+  addComment: async (
+    postId: string,
+    userId: string,
+    username: string,
+    text: string,
+  ): Promise<boolean> => {
+    const postRef = firestore().collection('posts').doc(postId);
+    const commentRef = postRef.collection('comments').doc();
+
+    try {
+      await firestore().runTransaction(async transaction => {
+        const postDoc = await transaction.get(postRef);
+        if (!postDoc.exists()) throw new Error("Post introuvable");
+
+        const currentComments = postDoc.data()?.commentsCount || 0;
+
+        transaction.set(commentRef, {
+          userId,
+          username,
+          text: text.trim(),
+          createdAt: Date.now(),
+        });
+
+        transaction.update(postRef, {
+          commentsCount: currentComments + 1,
+        });
+      });
+      return true;
+    } catch (error) {
+      logger.error('Erreur addComment :', error);
+      return false;
     }
   },
 };

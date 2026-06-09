@@ -24,6 +24,7 @@ import { Post } from '../shared/contracts';
 import { getErrorMessage, logger } from '../utils/logger';
 import VideoPlayer from '../components/VideoPlayer';
 import OverlayActions from '../components/OverlayActions';
+import CommentSectionModal from '../components/CommentSectionModal';
 
 const { height, width } = Dimensions.get('window');
 const TAB_BAR_HEIGHT = 66;
@@ -49,6 +50,8 @@ export default function FeedScreen(): React.JSX.Element {
   const [loading, setLoading] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
   const [activePostId, setActivePostId] = useState<string | null>(null);
+  const [isCommentModalVisible, setIsCommentModalVisible] = useState<boolean>(false);
+  const [selectedPostIdForComment, setSelectedPostIdForComment] = useState<string | null>(null);
 
   const isFocused = useIsFocused();
 
@@ -157,7 +160,10 @@ export default function FeedScreen(): React.JSX.Element {
             commentsCount={item.commentsCount}
             username={username}
             onLike={() => handleLike(item.id)}
-            onComment={() => logger.debug('Ouvrir les commentaires')}
+            onComment={() => {
+              setSelectedPostIdForComment(item.id);
+              setIsCommentModalVisible(true);
+            }}
             onShare={() => logger.debug('Partager la vidéo')}
             onProfile={() => logger.debug('Ouvrir le profil createur')}
           />
@@ -166,6 +172,19 @@ export default function FeedScreen(): React.JSX.Element {
     },
     [activePostId, isFocused, handleLike],
   );
+
+  const handleCommentAdded = useCallback(() => {
+    // Optionnel : Rafraîchir localement le compteur pour éviter un fetch complet.
+    if (selectedPostIdForComment) {
+      setVideos(prev => 
+        prev.map(v => 
+          v.id === selectedPostIdForComment 
+            ? { ...v, commentsCount: v.commentsCount + 1 } 
+            : v
+        )
+      );
+    }
+  }, [selectedPostIdForComment]);
 
   if (loading) {
     return (
@@ -215,6 +234,15 @@ export default function FeedScreen(): React.JSX.Element {
           </View>
         }
       />
+
+      {selectedPostIdForComment && (
+        <CommentSectionModal
+          isVisible={isCommentModalVisible}
+          onClose={() => setIsCommentModalVisible(false)}
+          postId={selectedPostIdForComment}
+          onCommentAdded={handleCommentAdded}
+        />
+      )}
     </View>
   );
 }
