@@ -27,7 +27,26 @@ export const postService = {
     const snapshot = await firestore()
       .collection('posts')
       .orderBy('createdAt', 'desc')
-      .limit(10)
+      .limit(50)
+      .get();
+
+    return snapshot.docs.map(
+      doc =>
+        ({
+          id: doc.id,
+          ...doc.data(),
+        } as Post),
+    );
+  },
+
+  /**
+   * Récupère les publications d'un utilisateur spécifique.
+   */
+  getUserPosts: async (userId: string): Promise<Post[]> => {
+    const snapshot = await firestore()
+      .collection('posts')
+      .where('userId', '==', userId)
+      .orderBy('createdAt', 'desc')
       .get();
 
     return snapshot.docs.map(
