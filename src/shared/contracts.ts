@@ -34,3 +34,12 @@ export interface CreatePostInput {
   videoLocalPath: string;
   description: string;
 }
+
+/** Commentaire sur un post tel que stocké dans la sous-collection `comments`. */
+export interface Comment {
+  id: string;
+  userId: string;
+  username: string;
+  text: string;
+  createdAt: number;
+}
