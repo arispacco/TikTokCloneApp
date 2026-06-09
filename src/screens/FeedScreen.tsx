@@ -11,14 +11,7 @@ import {
 } from 'react-native';
 import auth from '@react-native-firebase/auth';
 import { useIsFocused } from '@react-navigation/native';
-import {
-  Heart,
-  MessageCircle,
-  Music,
-  Plus,
-  Search,
-  Send,
-} from 'lucide-react-native';
+import { Search } from 'lucide-react-native';
 import { postService } from '../services/postService';
 import { Post } from '../shared/contracts';
 import { getErrorMessage, logger } from '../utils/logger';
@@ -32,18 +25,6 @@ const FEED_ITEM_HEIGHT = height - TAB_BAR_HEIGHT;
 
 // Une vidéo est considérée "active" quand au moins 80% est visible.
 const VIEWABILITY_CONFIG = { itemVisiblePercentThreshold: 80 };
-
-function formatCount(value: number): string {
-  if (value >= 1_000_000) {
-    return `${(value / 1_000_000).toFixed(1).replace('.', ',')} M`;
-  }
-
-  if (value >= 1_000) {
-    return `${(value / 1_000).toFixed(1).replace('.', ',')} K`;
-  }
-
-  return String(value);
-}
 
 export default function FeedScreen(): React.JSX.Element {
   const [videos, setVideos] = useState<Post[]>([]);
