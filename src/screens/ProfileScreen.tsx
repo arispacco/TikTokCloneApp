@@ -4,7 +4,6 @@ import {
   Alert,
   Dimensions,
   FlatList,
-  Image,
   StyleSheet,
   Text,
   TouchableOpacity,
@@ -116,7 +115,7 @@ export default function ProfileScreen(): React.JSX.Element {
         }
         ListEmptyComponent={
           loading ? (
-            <ActivityIndicator size="large" color="#ff2d55" style={{ marginTop: 40 }} />
+            <ActivityIndicator size="large" color="#ff2d55" style={styles.loadingIndicator} />
           ) : (
             <View style={styles.emptyState}>
               <Text style={styles.emptyTitle}>Aucune publication</Text>
@@ -127,7 +126,7 @@ export default function ProfileScreen(): React.JSX.Element {
           )
         }
         ListFooterComponent={
-          <View style={{ paddingVertical: 40, alignItems: 'center' }}>
+          <View style={styles.footer}>
             <TouchableOpacity
               style={styles.logoutButton}
               onPress={handleLogout}
@@ -244,6 +243,13 @@ const styles = StyleSheet.create({
     fontSize: 14,
     marginTop: 6,
     textAlign: 'center',
+  },
+  loadingIndicator: {
+    marginTop: 40,
+  },
+  footer: {
+    paddingVertical: 40,
+    alignItems: 'center',
   },
   logoutButton: {
     flexDirection: 'row',
