@@ -220,3 +220,6 @@ L'application est désormais **fonctionnelle de bout en bout côté front** (And
 * [x] Règles de sécurité `firestore.rules` / `storage.rules` et `firebase.json`.
 * [x] Configuration native Android des librairies (gesture-handler, screens, vision-camera) et signing de la release.
 * [x] Pipeline CI/CD (`.github/workflows/`).
+
+---
+*Dernière vérification CI/CD en cours sur la branche `feature/firebase-backend`.*
