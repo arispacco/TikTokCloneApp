@@ -1,5 +1,3 @@
----
-
 # 📱 TikTokCloneApp
 
 Bienvenue dans le dépôt officiel de **TikTokCloneApp** ! Ce projet a pour objectif de reproduire les fonctionnalités majeures de TikTok afin de maîtriser le développement mobile avec **React Native**, la gestion de base de données asynchrone avec **Firebase**, et le travail collaboratif sur **GitHub**.
@@ -205,6 +203,23 @@ Voici la liste des packages requis. Ils seront installés au fur et à mesure pa
 2. **Pas de push direct sur main :** La branche `main` doit toujours rester propre et fonctionnelle. On passe obligatoirement par une *Pull Request* approuvée par au moins un autre membre.
 3. **Le contrat est sacré :** Toute modification de la structure des données dans `src/shared/contracts.ts` doit être votée et validée par l'ensemble des 4 membres.
 4. **Test sur appareil réel :** Le module vidéo manipulant de gros volumes de données, teste régulièrement sur un vrai téléphone pour surveiller la fluidité et la surchauffe.
->>>>>>> 4023b9b7709cd9d1abb5bc7bfe4b90eb4e6106d2
 
-cool
+---
+
+## ✅ État actuel (branche `feature/firebase-backend`)
+
+L'application est désormais **fonctionnelle de bout en bout côté front** (Android, Firebase) :
+
+* **Authentification branchée** : `AuthProvider` + hook `useAuth` basés sur `onAuthStateChanged`, écrans `Login`/`Register`, et un `RootNavigator` qui bascule automatiquement entre la pile d'auth (déconnecté) et les onglets principaux (connecté).
+* **Feed robuste** : une seule vidéo active à la fois (`onViewableItemsChanged`), pause hors focus d'onglet (`useIsFocused`), états explicites `loading` / `error` (avec retry) / `empty`, et compteur de likes ajusté +1/-1 selon l'état réel.
+* **Publication** : la caméra passe par `postService.createPost()` (upload Storage + écriture Firestore centralisée) avec gestion d'erreur utilisateur.
+* **Qualité** : contrats centralisés (`src/shared/contracts.ts`), logger centralisé (`src/utils/logger.ts`), `ErrorBoundary` global, tests Jest (services + auth).
+
+### ✅ Reste à faire (Terminé)
+
+* [x] Règles de sécurité `firestore.rules` / `storage.rules` et `firebase.json`.
+* [x] Configuration native Android des librairies (gesture-handler, screens, vision-camera) et signing de la release.
+* [x] Pipeline CI/CD (`.github/workflows/`).
+
+---
+*Dernière vérification CI/CD en cours sur la branche `feature/firebase-backend`.*

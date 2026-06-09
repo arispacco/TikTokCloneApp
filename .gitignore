@@ -31,9 +31,20 @@ local.properties
 *.iml
 *.hprof
 .cxx/
+# Keystores de signature : on ignore TOUTES les keystores release (jamais
+# committées) tout en gardant la debug.keystore partagée pour les builds locaux.
 *.keystore
 !debug.keystore
+*.jks
 .kotlin/
+
+# Secrets / variables d'environnement (signature release, clés, etc.)
+.env
+.env.*
+!.env.example
+keystore.properties
+android/key.properties
+android/app/release.keystore
 
 # node.js
 #
@@ -73,3 +84,6 @@ yarn-error.log
 !.yarn/releases
 !.yarn/sdks
 !.yarn/versions
+
+# Firebase
+.firebase/

@@ -1,0 +1,35 @@
+rules_version = '2';
+
+// Règles de sécurité Cloud Storage — clone TikTok.
+//
+// Calées sur src/services/storageService.ts :
+//  - users/{uid}/avatar.jpg  : photo de profil (uploadAvatar)
+//  - posts/{postId}/video.mp4 : vidéo d'un post (uploadVideo)
+service firebase.storage {
+  match /b/{bucket}/o {
+
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    // Avatar de profil : lecture pour tout utilisateur connecté,
+    // écriture réservée au propriétaire, image uniquement, < 5 Mo.
+    match /users/{uid}/avatar.jpg {
+      allow read: if isSignedIn();
+      allow write: if isSignedIn()
+        && request.auth.uid == uid
+        && request.resource.size < 5 * 1024 * 1024
+        && request.resource.contentType.matches('image/.*');
+    }
+
+    // Vidéo d'un post : lecture pour tout utilisateur connecté,
+    // écriture par n'importe quel utilisateur connecté (l'ID de post est généré
+    // côté client avant l'upload), vidéo uniquement, < 100 Mo.
+    match /posts/{postId}/video.mp4 {
+      allow read: if isSignedIn();
+      allow write: if isSignedIn()
+        && request.resource.size < 100 * 1024 * 1024
+        && request.resource.contentType.matches('video/.*');
+    }
+  }
+}

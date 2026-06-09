@@ -1,14 +1,93 @@
-name: Android Build (Debug & Release APK)
+name: Android CI/CD (Quality + Debug APK + Signed Release AAB/APK)
 
 on:
   pull_request:
+  push:
+    branches: ['**']
   workflow_dispatch:
 
-jobs:
-  build-apks:
-    name: Build Debug and Release APKs
-    runs-on: ubuntu-latest
+# Permissions minimales : le workflow ne fait que lire le dépôt et publier des artefacts.
+permissions:
+  contents: read
 
+# Annule les exécutions précédentes encore en cours sur la même ref (économie de runners).
+concurrency:
+  group: android-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  # ---------------------------------------------------------------------------
+  # 1) QUALITÉ : feedback rapide (pas de build natif) — lint + typecheck + tests.
+  #    Sert de garde-fou : si ça casse, on ne lance pas les builds natifs coûteux.
+  # ---------------------------------------------------------------------------
+  quality:
+    name: Lint, Typecheck & Unit tests
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Setup Java 21 (Temurin)
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 21
+          cache: gradle
+
+      - name: Install npm dependencies
+        run: npm ci
+
+      - name: ESLint
+        run: npm run lint
+
+      - name: TypeScript (tsc --noEmit)
+        run: npm run typecheck
+
+      - name: Unit tests (Jest)
+        run: npm test -- --ci
+
+      - name: Firebase rules emulator smoke test
+        env:
+          XDG_CONFIG_HOME: ${{ runner.temp }}/firebase-config
+        run: npm run firebase:rules:check
+
+  # ---------------------------------------------------------------------------
+  # 2) DÉTECTION DES SECRETS DE SIGNATURE
+  #    Un job-level `if:` ne peut pas lire un secret directement : on expose donc
+  #    un booléen en sortie. Permet aux PR sans secrets de rester fonctionnelles.
+  # ---------------------------------------------------------------------------
+  detect-signing:
+    name: Detect signing secrets
+    runs-on: ubuntu-latest
+    needs: quality
+    outputs:
+      has_signing: ${{ steps.check.outputs.has_signing }}
+    steps:
+      - id: check
+        env:
+          RELEASE_KEYSTORE_BASE64: ${{ secrets.RELEASE_KEYSTORE_BASE64 }}
+        run: |
+          if [ -n "$RELEASE_KEYSTORE_BASE64" ]; then
+            echo "has_signing=true" >> "$GITHUB_OUTPUT"
+            echo "Secrets de signature détectés : build release signé activé."
+          else
+            echo "has_signing=false" >> "$GITHUB_OUTPUT"
+            echo "Aucun secret de signature : seul le build debug sera produit."
+          fi
+
+  # ---------------------------------------------------------------------------
+  # 3) BUILD DEBUG (toujours exécuté) — APK arm64-v8a uniquement pour aller vite.
+  # ---------------------------------------------------------------------------
+  build-debug:
+    name: Build debug APK
+    runs-on: ubuntu-latest
+    needs: quality
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -39,37 +118,17 @@ jobs:
             "ndk;27.0.12077973" \
             "cmake;3.22.1"
 
-      # Ce bloc neutralise tes configurations Windows locales pour que le serveur Linux de GitHub 
-      # utilise ses propres variables d'environnement sans planter.
-      - name: Neutralize Windows-only Gradle config (CI runner only)
-        run: |
-          cd android
-          sed -i 's/^org\.gradle\.java\.home/#&/' gradle.properties
-          sed -i 's/^org\.gradle\.java\.installations\.paths/#&/' gradle.properties
-          sed -i 's/^org\.gradle\.java\.installations\.auto-download/#&/' gradle.properties
-          sed -i 's/^org\.gradle\.java\.installations\.auto-detect/#&/' gradle.properties
-          sed -i 's/^android\.builder\.sdkDownload/#&/' gradle.properties
-          echo "----- gradle.properties effectif sur le runner -----"
-          cat gradle.properties
-
       - name: Install npm dependencies (runs postinstall -> patch-package)
         run: npm ci
 
-      # --- ÉTAPE DE COMPILATION 1 : VERSION DEBUG ---
-      - name: Build debug APK
+      - name: Build debug APK (arm64-v8a only)
         run: |
           cd android
           chmod +x gradlew
-          ./gradlew assembleDebug --no-daemon --stacktrace
+          ./gradlew assembleDebug \
+            -PreactNativeArchitectures=arm64-v8a \
+            --no-daemon --stacktrace
 
-      # --- ÉTAPE DE COMPILATION 2 : VERSION RELEASE (AJOUTÉE) ---
-      - name: Build release APK
-        run: |
-          cd android
-          chmod +x gradlew
-          ./gradlew assembleRelease --no-daemon --stacktrace
-
-      # --- EXPORTATION 1 : SÉCURISER L'APK DEBUG ---
       - name: Upload debug APK artifact
         uses: actions/upload-artifact@v4
         with:
@@ -78,7 +137,84 @@ jobs:
           if-no-files-found: error
           retention-days: 14
 
-      # --- EXPORTATION 2 : SÉCURISER L'APK RELEASE (AJOUTÉE) ---
+  # ---------------------------------------------------------------------------
+  # 4) BUILD RELEASE — AAB (store) + APK.
+  #    Si les secrets existent, la release est signée avec la clé de production.
+  #    Sinon Gradle utilise la debug.keystore de fallback déclarée dans build.gradle
+  #    afin de produire quand même un APK release installable pour les tests.
+  # ---------------------------------------------------------------------------
+  build-release:
+    name: Build signed release AAB & APK
+    runs-on: ubuntu-latest
+    needs: [quality, detect-signing]
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Setup Java 21 (Temurin)
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 21
+          cache: gradle
+
+      - name: Setup Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Install Android SDK packages (platform, build-tools, NDK, CMake)
+        run: |
+          yes | sdkmanager --licenses > /dev/null || true
+          sdkmanager \
+            "platform-tools" \
+            "platforms;android-36" \
+            "build-tools;36.1.0" \
+            "ndk;27.0.12077973" \
+            "cmake;3.22.1"
+
+      - name: Install npm dependencies (runs postinstall -> patch-package)
+        run: npm ci
+
+      - name: Decode release keystore from secret
+        if: needs.detect-signing.outputs.has_signing == 'true'
+        env:
+          RELEASE_KEYSTORE_BASE64: ${{ secrets.RELEASE_KEYSTORE_BASE64 }}
+        run: |
+          echo "$RELEASE_KEYSTORE_BASE64" | base64 --decode > android/app/release.keystore
+          echo "Keystore décodée vers android/app/release.keystore"
+
+      - name: Build signed release AAB and APK
+        env:
+          # build.gradle lit ces variables pour signingConfigs.release.
+          # Si RELEASE_STORE_FILE est vide, build.gradle retombe sur debug.keystore.
+          RELEASE_STORE_FILE: ${{ needs.detect-signing.outputs.has_signing == 'true' && 'release.keystore' || '' }}
+          RELEASE_STORE_PASSWORD: ${{ secrets.RELEASE_STORE_PASSWORD }}
+          RELEASE_KEY_ALIAS: ${{ secrets.RELEASE_KEY_ALIAS }}
+          RELEASE_KEY_PASSWORD: ${{ secrets.RELEASE_KEY_PASSWORD }}
+        run: |
+          cd android
+          chmod +x gradlew
+          # bundleRelease (AAB pour le Play Store, géré en splits côté store)
+          # + assembleRelease (APK installable directement).
+          ./gradlew bundleRelease assembleRelease --no-daemon --stacktrace
+
+      - name: Remove decoded keystore
+        if: always()
+        run: rm -f android/app/release.keystore
+
+      - name: Upload release AAB artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: app-release-aab
+          path: android/app/build/outputs/bundle/release/*.aab
+          if-no-files-found: error
+          retention-days: 14
+
       - name: Upload release APK artifact
         uses: actions/upload-artifact@v4
         with:
