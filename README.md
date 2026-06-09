@@ -215,8 +215,8 @@ L'application est désormais **fonctionnelle de bout en bout côté front** (And
 * **Publication** : la caméra passe par `postService.createPost()` (upload Storage + écriture Firestore centralisée) avec gestion d'erreur utilisateur.
 * **Qualité** : contrats centralisés (`src/shared/contracts.ts`), logger centralisé (`src/utils/logger.ts`), `ErrorBoundary` global, tests Jest (services + auth).
 
-### Reste à faire (worker CI/CD & sécurité Firebase)
+### ✅ Reste à faire (Terminé)
 
-* Règles de sécurité `firestore.rules` / `storage.rules` et `firebase.json`.
-* Configuration native Android des librairies (gesture-handler, screens, vision-camera) et signing de la release.
-* Pipeline CI/CD (`.github/workflows/`).
+* [x] Règles de sécurité `firestore.rules` / `storage.rules` et `firebase.json`.
+* [x] Configuration native Android des librairies (gesture-handler, screens, vision-camera) et signing de la release.
+* [x] Pipeline CI/CD (`.github/workflows/`).
