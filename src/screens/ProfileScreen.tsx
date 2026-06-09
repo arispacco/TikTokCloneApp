@@ -19,7 +19,7 @@ const { width } = Dimensions.get('window');
 const COLUMN_WIDTH = width / 3;
 
 export default function ProfileScreen(): React.JSX.Element {
-  const { user, logout, loading: authLoading } = useAuth();
+  const { user, profile, logout, loading: authLoading } = useAuth();
   const [posts, setPosts] = useState<Post[]>([]);
   const [loading, setLoading] = useState<boolean>(true);
 
@@ -30,7 +30,10 @@ export default function ProfileScreen(): React.JSX.Element {
       const userPosts = await postService.getUserPosts(user.uid);
       setPosts(userPosts);
     } catch (error) {
-      logger.error('Erreur lors de la recuperation des posts utilisateur', error);
+      logger.error(
+        'Erreur lors de la recuperation des posts utilisateur',
+        error,
+      );
     } finally {
       setLoading(false);
     }
@@ -43,11 +46,17 @@ export default function ProfileScreen(): React.JSX.Element {
   const handleLogout = async () => {
     const result = await logout();
     if (!result.success) {
-      Alert.alert('Deconnexion impossible', result.error ?? 'Reessaie plus tard.');
+      Alert.alert(
+        'Deconnexion impossible',
+        result.error ?? 'Reessaie plus tard.',
+      );
     }
   };
 
-  const totalLikes = posts.reduce((acc, post) => acc + (post.likesCount || 0), 0);
+  const totalLikes = posts.reduce(
+    (acc, post) => acc + (post.likesCount || 0),
+    0,
+  );
 
   const renderGridItem = ({ item }: { item: Post }) => (
     <TouchableOpacity
@@ -81,17 +90,27 @@ export default function ProfileScreen(): React.JSX.Element {
             </View>
 
             <Text style={styles.username}>
-              @{user?.displayName ?? user?.email?.split('@')[0] ?? 'utilisateur'}
+              @
+              {profile?.username ??
+                user?.displayName ??
+                user?.email?.split('@')[0] ??
+                'utilisateur'}
             </Text>
-            <Text style={styles.email}>{user?.email ?? 'Compte connecte'}</Text>
+            <Text style={styles.email}>
+              {profile?.email ?? user?.email ?? 'Compte connecte'}
+            </Text>
 
             <View style={styles.stats}>
               <View style={styles.statItem}>
-                <Text style={styles.statValue}>0</Text>
+                <Text style={styles.statValue}>
+                  {profile?.followingCount ?? 0}
+                </Text>
                 <Text style={styles.statLabel}>Abonnements</Text>
               </View>
               <View style={styles.statItem}>
-                <Text style={styles.statValue}>0</Text>
+                <Text style={styles.statValue}>
+                  {profile?.followersCount ?? 0}
+                </Text>
                 <Text style={styles.statLabel}>Abonnes</Text>
               </View>
               <View style={styles.statItem}>
@@ -115,7 +134,11 @@ export default function ProfileScreen(): React.JSX.Element {
         }
         ListEmptyComponent={
           loading ? (
-            <ActivityIndicator size="large" color="#ff2d55" style={styles.loadingIndicator} />
+            <ActivityIndicator
+              size="large"
+              color="#ff2d55"
+              style={styles.loadingIndicator}
+            />
           ) : (
             <View style={styles.emptyState}>
               <Text style={styles.emptyTitle}>Aucune publication</Text>
@@ -232,10 +255,10 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontWeight: '700',
   },
-  emptyState: { 
+  emptyState: {
     paddingTop: 60,
-    alignItems: 'center', 
-    justifyContent: 'center' 
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   emptyTitle: { color: '#ffffff', fontSize: 16, fontWeight: '700' },
   emptyText: {

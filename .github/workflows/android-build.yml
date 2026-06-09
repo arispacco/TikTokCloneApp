@@ -3,7 +3,7 @@ name: Android CI/CD (Quality + Debug APK + Signed Release AAB/APK)
 on:
   pull_request:
   push:
-    branches: ["**"]
+    branches: ['**']
   workflow_dispatch:
 
 # Permissions minimales : le workflow ne fait que lire le dépôt et publier des artefacts.
@@ -33,6 +33,13 @@ jobs:
           node-version: 22
           cache: npm
 
+      - name: Setup Java 21 (Temurin)
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 21
+          cache: gradle
+
       - name: Install npm dependencies
         run: npm ci
 
@@ -44,6 +51,11 @@ jobs:
 
       - name: Unit tests (Jest)
         run: npm test -- --ci
+
+      - name: Firebase rules emulator smoke test
+        env:
+          XDG_CONFIG_HOME: ${{ runner.temp }}/firebase-config
+        run: npm run firebase:rules:check
 
   # ---------------------------------------------------------------------------
   # 2) DÉTECTION DES SECRETS DE SIGNATURE

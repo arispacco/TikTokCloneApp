@@ -1,7 +1,17 @@
-import firestore from '@react-native-firebase/firestore';
+import firestore, {
+  FirebaseFirestoreTypes,
+} from '@react-native-firebase/firestore';
 import { storageService } from './storageService';
 import { Comment, CreatePostInput, Post } from '../shared/contracts';
 import { getErrorMessage, logger } from '../utils/logger';
+
+export type FeedCursor = FirebaseFirestoreTypes.QueryDocumentSnapshot;
+
+export interface FeedPage {
+  posts: Post[];
+  cursor: FeedCursor | null;
+  hasMore: boolean;
+}
 
 export interface ToggleLikeResult {
   success: boolean;
@@ -23,20 +33,38 @@ export const postService = {
    * Les erreurs ne sont PLUS avalées silencieusement : elles sont propagées
    * pour que l'UI puisse afficher un état d'erreur avec retry.
    */
-  getFeed: async (): Promise<Post[]> => {
-    const snapshot = await firestore()
+  getFeedPage: async (
+    pageSize = 15,
+    cursor?: FeedCursor | null,
+  ): Promise<FeedPage> => {
+    let query = firestore()
       .collection('posts')
       .orderBy('createdAt', 'desc')
-      .limit(50)
-      .get();
+      .limit(pageSize);
 
-    return snapshot.docs.map(
+    if (cursor) {
+      query = query.startAfter(cursor);
+    }
+
+    const snapshot = await query.get();
+    const posts = snapshot.docs.map(
       doc =>
         ({
           id: doc.id,
           ...doc.data(),
         } as Post),
     );
+
+    return {
+      posts,
+      cursor: snapshot.docs[snapshot.docs.length - 1] ?? null,
+      hasMore: snapshot.docs.length === pageSize,
+    };
+  },
+
+  getFeed: async (): Promise<Post[]> => {
+    const page = await postService.getFeedPage();
+    return page.posts;
   },
 
   /**
@@ -66,9 +94,13 @@ export const postService = {
   createPost: async ({
     userId,
     videoLocalPath,
+    title,
     description,
   }: CreatePostInput): Promise<CreatePostResult> => {
     try {
+      const trimmedTitle = title?.trim();
+      const trimmedDescription = description.trim();
+
       // 1. Identifiant de document unique
       const postRef = firestore().collection('posts').doc();
       const postId = postRef.id;
@@ -91,11 +123,16 @@ export const postService = {
         id: postId,
         userId,
         videoUrl: cloudVideoUrl,
-        description: description.trim(),
+        description: trimmedDescription,
         likesCount: 0,
         commentsCount: 0,
         createdAt: Date.now(),
       };
+
+      if (trimmedTitle) {
+        post.title = trimmedTitle;
+      }
+
       await postRef.set(post);
 
       return { success: true, post };
@@ -179,20 +216,26 @@ export const postService = {
     username: string,
     text: string,
   ): Promise<boolean> => {
+    const trimmedText = text.trim();
+    const trimmedUsername = username.trim();
+    if (!trimmedText || !trimmedUsername) {
+      return false;
+    }
+
     const postRef = firestore().collection('posts').doc(postId);
     const commentRef = postRef.collection('comments').doc();
 
     try {
       await firestore().runTransaction(async transaction => {
         const postDoc = await transaction.get(postRef);
-        if (!postDoc.exists()) throw new Error("Post introuvable");
+        if (!postDoc.exists()) throw new Error('Post introuvable');
 
         const currentComments = postDoc.data()?.commentsCount || 0;
 
         transaction.set(commentRef, {
           userId,
-          username,
-          text: text.trim(),
+          username: trimmedUsername,
+          text: trimmedText,
           createdAt: Date.now(),
         });
 

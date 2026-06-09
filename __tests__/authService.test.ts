@@ -24,9 +24,10 @@ beforeEach(() => {
 
 describe('authService.register', () => {
   it('crée le compte Auth puis le profil Firestore (succès)', async () => {
+    const updateProfile = jest.fn().mockResolvedValue(undefined);
     const createUser = jest
       .fn()
-      .mockResolvedValue({ user: { uid: 'uid1' } });
+      .mockResolvedValue({ user: { uid: 'uid1', updateProfile } });
     mockAuth.mockReturnValue({ createUserWithEmailAndPassword: createUser });
 
     const set = jest.fn().mockResolvedValue(undefined);
@@ -37,7 +38,15 @@ describe('authService.register', () => {
     const result = await authService.register('a@b.com', 'secret', 'Alice');
 
     expect(createUser).toHaveBeenCalledWith('a@b.com', 'secret');
+    expect(updateProfile).toHaveBeenCalledWith({ displayName: 'alice' });
     expect(set).toHaveBeenCalledTimes(1);
+    expect(set).toHaveBeenCalledWith(
+      expect.objectContaining({
+        uid: 'uid1',
+        email: 'a@b.com',
+        username: 'alice',
+      }),
+    );
     expect(result.success).toBe(true);
     expect(result.user?.uid).toBe('uid1');
   });
@@ -85,7 +94,7 @@ describe('authService.login', () => {
 });
 
 describe('authService.logout', () => {
-  it('déconnecte l\'utilisateur (succès)', async () => {
+  it("déconnecte l'utilisateur (succès)", async () => {
     const signOut = jest.fn().mockResolvedValue(undefined);
     mockAuth.mockReturnValue({ signOut });
 
@@ -93,5 +102,30 @@ describe('authService.logout', () => {
 
     expect(signOut).toHaveBeenCalledTimes(1);
     expect(result.success).toBe(true);
+  });
+});
+
+describe('authService.getUserProfile', () => {
+  it('renvoie le profil Firestore si le document existe', async () => {
+    const data = jest.fn(() => ({ uid: 'uid1', username: 'alice' }));
+    const get = jest.fn().mockResolvedValue({ exists: () => true, data });
+    mockFirestore.mockReturnValue({
+      collection: () => ({ doc: () => ({ get }) }),
+    });
+
+    const profile = await authService.getUserProfile('uid1');
+
+    expect(profile).toMatchObject({ uid: 'uid1', username: 'alice' });
+  });
+
+  it('renvoie null si le profil Firestore est absent', async () => {
+    const get = jest.fn().mockResolvedValue({ exists: () => false });
+    mockFirestore.mockReturnValue({
+      collection: () => ({ doc: () => ({ get }) }),
+    });
+
+    const profile = await authService.getUserProfile('uid1');
+
+    expect(profile).toBeNull();
   });
 });

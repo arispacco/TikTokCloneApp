@@ -19,6 +19,12 @@ service cloud.firestore {
       return isSignedIn() && request.auth.uid == uid;
     }
 
+    function isNonEmptyString(value, maxLength) {
+      return value is string
+        && value.size() > 0
+        && value.size() <= maxLength;
+    }
+
     // ---------------------------------------------------------------------
     // Profils utilisateurs : users/{uid}
     // Le document est créé à l'inscription avec doc(uid) (cf. authService.register).
@@ -31,7 +37,7 @@ service cloud.firestore {
 
     // ---------------------------------------------------------------------
     // Posts : posts/{postId}
-    // Lecture si connecté (le feed fait orderBy('createdAt').limit(10)).
+    // Lecture si connecté (le feed fait orderBy('createdAt') avec pagination).
     // Création : uniquement par l'auteur, qui doit s'auto-déclarer (userId == uid).
     // Suppression : par l'auteur du post.
     // Mise à jour : UNIQUEMENT le compteur likesCount (±1), pour coller au flux
@@ -42,20 +48,64 @@ service cloud.firestore {
       allow read: if isSignedIn();
 
       allow create: if isSignedIn()
-        && request.resource.data.userId == request.auth.uid;
+        && request.resource.data.keys().hasOnly([
+          'id',
+          'userId',
+          'videoUrl',
+          'title',
+          'description',
+          'likesCount',
+          'commentsCount',
+          'createdAt',
+        ])
+        && request.resource.data.keys().hasAll([
+          'id',
+          'userId',
+          'videoUrl',
+          'description',
+          'likesCount',
+          'commentsCount',
+          'createdAt',
+        ])
+        && request.resource.data.id == postId
+        && request.resource.data.userId == request.auth.uid
+        && isNonEmptyString(request.resource.data.videoUrl, 2048)
+        && request.resource.data.description is string
+        && request.resource.data.description.size() <= 2200
+        && request.resource.data.likesCount == 0
+        && request.resource.data.commentsCount == 0
+        && request.resource.data.createdAt is int
+        && (
+          !request.resource.data.keys().hasAny(['title'])
+          || (
+            request.resource.data.title is string
+            && request.resource.data.title.size() <= 80
+          )
+        );
 
       allow delete: if isSignedIn()
         && resource.data.userId == request.auth.uid;
 
-      // toggleLike (transaction) modifie seulement likesCount, de +1 ou -1.
-      // On tolère un delta dans [-1, +1] pour couvrir le cas Math.max(0, n-1)
-      // quand n vaut déjà 0 (delta 0), sans jamais autoriser d'autre champ.
       allow update: if isSignedIn()
-        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['likesCount'])
-        && request.resource.data.likesCount is int
-        && request.resource.data.likesCount >= resource.data.likesCount - 1
-        && request.resource.data.likesCount <= resource.data.likesCount + 1
-        && request.resource.data.likesCount >= 0;
+        && (
+          // toggleLike (transaction) modifie seulement likesCount, de +1 ou -1.
+          // On tolère un delta dans [-1, +1] pour couvrir le cas Math.max(0, n-1)
+          // quand n vaut déjà 0 (delta 0), sans jamais autoriser d'autre champ.
+          (
+            request.resource.data.diff(resource.data).affectedKeys().hasOnly(['likesCount'])
+            && request.resource.data.likesCount is int
+            && request.resource.data.likesCount >= resource.data.likesCount - 1
+            && request.resource.data.likesCount <= resource.data.likesCount + 1
+            && request.resource.data.likesCount >= 0
+          )
+          ||
+          // addComment (transaction) modifie seulement commentsCount de +1.
+          (
+            request.resource.data.diff(resource.data).affectedKeys().hasOnly(['commentsCount'])
+            && request.resource.data.commentsCount is int
+            && request.resource.data.commentsCount == resource.data.commentsCount + 1
+          )
+        );
 
       // -------------------------------------------------------------------
       // Likes : posts/{postId}/likes/{userId}
@@ -72,6 +122,32 @@ service cloud.firestore {
 
         allow delete: if isSignedIn()
           && likeUserId == request.auth.uid;
+      }
+
+      // -------------------------------------------------------------------
+      // Commentaires : posts/{postId}/comments/{commentId}
+      // addComment écrit { userId, username, text, createdAt } puis incrémente
+      // posts/{postId}.commentsCount dans la même transaction.
+      // -------------------------------------------------------------------
+      match /comments/{commentId} {
+        allow read: if isSignedIn();
+
+        allow create: if isSignedIn()
+          && request.resource.data.keys().hasOnly([
+            'userId',
+            'username',
+            'text',
+            'createdAt',
+          ])
+          && request.resource.data.userId == request.auth.uid
+          && isNonEmptyString(request.resource.data.username, 40)
+          && isNonEmptyString(request.resource.data.text, 500)
+          && request.resource.data.createdAt is int;
+
+        allow update: if false;
+
+        allow delete: if isSignedIn()
+          && resource.data.userId == request.auth.uid;
       }
     }
   }

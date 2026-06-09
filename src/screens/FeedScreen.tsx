@@ -12,7 +12,7 @@ import {
 import auth from '@react-native-firebase/auth';
 import { useIsFocused } from '@react-navigation/native';
 import { Search } from 'lucide-react-native';
-import { postService } from '../services/postService';
+import { FeedCursor, postService } from '../services/postService';
 import { Post } from '../shared/contracts';
 import { getErrorMessage, logger } from '../utils/logger';
 import VideoPlayer from '../components/VideoPlayer';
@@ -22,6 +22,7 @@ import CommentSectionModal from '../components/CommentSectionModal';
 const { height, width } = Dimensions.get('window');
 const TAB_BAR_HEIGHT = 66;
 const FEED_ITEM_HEIGHT = height - TAB_BAR_HEIGHT;
+const FEED_PAGE_SIZE = 15;
 
 // Une vidéo est considérée "active" quand au moins 80% est visible.
 const VIEWABILITY_CONFIG = { itemVisiblePercentThreshold: 80 };
@@ -32,8 +33,14 @@ export default function FeedScreen(): React.JSX.Element {
   const [error, setError] = useState<string | null>(null);
   const [activePostId, setActivePostId] = useState<string | null>(null);
   const [activeIndex, setActiveIndex] = useState<number>(0);
-  const [isCommentModalVisible, setIsCommentModalVisible] = useState<boolean>(false);
-  const [selectedPostIdForComment, setSelectedPostIdForComment] = useState<string | null>(null);
+  const [isCommentModalVisible, setIsCommentModalVisible] =
+    useState<boolean>(false);
+  const [selectedPostIdForComment, setSelectedPostIdForComment] = useState<
+    string | null
+  >(null);
+  const [lastFeedCursor, setLastFeedCursor] = useState<FeedCursor | null>(null);
+  const [hasMoreFeed, setHasMoreFeed] = useState<boolean>(true);
+  const [loadingMoreFeed, setLoadingMoreFeed] = useState<boolean>(false);
 
   const isFocused = useIsFocused();
 
@@ -41,9 +48,12 @@ export default function FeedScreen(): React.JSX.Element {
     setLoading(true);
     setError(null);
     try {
-      const feedItems = await postService.getFeed();
-      setVideos(feedItems);
-      setActivePostId(prev => prev ?? feedItems[0]?.id ?? null);
+      const page = await postService.getFeedPage(FEED_PAGE_SIZE);
+      setVideos(page.posts);
+      setLastFeedCursor(page.cursor);
+      setHasMoreFeed(page.hasMore);
+      setActiveIndex(0);
+      setActivePostId(page.posts[0]?.id ?? null);
     } catch (err: unknown) {
       logger.error('Erreur chargement UI Feed :', err);
       setError(getErrorMessage(err));
@@ -55,6 +65,33 @@ export default function FeedScreen(): React.JSX.Element {
   useEffect(() => {
     loadFeedData();
   }, [loadFeedData]);
+
+  const loadMoreFeedData = useCallback(async () => {
+    if (loading || loadingMoreFeed || !hasMoreFeed || !lastFeedCursor) {
+      return;
+    }
+
+    setLoadingMoreFeed(true);
+    try {
+      const page = await postService.getFeedPage(
+        FEED_PAGE_SIZE,
+        lastFeedCursor,
+      );
+      setVideos(prevVideos => {
+        const existingIds = new Set(prevVideos.map(video => video.id));
+        const nextVideos = page.posts.filter(
+          video => !existingIds.has(video.id),
+        );
+        return [...prevVideos, ...nextVideos];
+      });
+      setLastFeedCursor(page.cursor);
+      setHasMoreFeed(page.hasMore);
+    } catch (err: unknown) {
+      logger.error('Erreur chargement page suivante du feed :', err);
+    } finally {
+      setLoadingMoreFeed(false);
+    }
+  }, [hasMoreFeed, lastFeedCursor, loading, loadingMoreFeed]);
 
   // Détermine la seule vidéo visible à activer.
   const onViewableItemsChanged = useRef(
@@ -140,6 +177,11 @@ export default function FeedScreen(): React.JSX.Element {
 
           <View style={styles.bottomOverlay}>
             <Text style={styles.username}>@{username}</Text>
+            {item.title ? (
+              <Text style={styles.postTitle} numberOfLines={1}>
+                {item.title}
+              </Text>
+            ) : null}
             <Text style={styles.description} numberOfLines={2}>
               {item.description || 'Nouvelle publication TikTokClone'}
             </Text>
@@ -161,18 +203,18 @@ export default function FeedScreen(): React.JSX.Element {
         </View>
       );
     },
-    [activePostId, isFocused, handleLike],
+    [activeIndex, activePostId, isFocused, handleLike],
   );
 
   const handleCommentAdded = useCallback(() => {
     // Optionnel : Rafraîchir localement le compteur pour éviter un fetch complet.
     if (selectedPostIdForComment) {
-      setVideos(prev => 
-        prev.map(v => 
-          v.id === selectedPostIdForComment 
-            ? { ...v, commentsCount: v.commentsCount + 1 } 
-            : v
-        )
+      setVideos(prev =>
+        prev.map(v =>
+          v.id === selectedPostIdForComment
+            ? { ...v, commentsCount: v.commentsCount + 1 }
+            : v,
+        ),
       );
     }
   }, [selectedPostIdForComment]);
@@ -224,6 +266,16 @@ export default function FeedScreen(): React.JSX.Element {
         decelerationRate="fast"
         showsVerticalScrollIndicator={false}
         viewabilityConfigCallbackPairs={viewabilityConfigCallbackPairs}
+        onEndReached={loadMoreFeedData}
+        onEndReachedThreshold={0.6}
+        extraData={activeIndex}
+        ListFooterComponent={
+          loadingMoreFeed ? (
+            <View style={styles.loadingMore}>
+              <ActivityIndicator size="small" color="#ff0050" />
+            </View>
+          ) : null
+        }
         ListEmptyComponent={
           <View style={styles.centered}>
             <Text style={styles.emptyText}>Aucune vidéo pour le moment.</Text>
@@ -341,7 +393,20 @@ const styles = StyleSheet.create({
     left: 18,
     width: width * 0.72,
   },
-  username: { color: 'white', fontWeight: '800', fontSize: 19, marginBottom: 7 },
+  username: {
+    color: 'white',
+    fontWeight: '800',
+    fontSize: 19,
+    marginBottom: 7,
+  },
+  postTitle: {
+    color: 'white',
+    fontSize: 17,
+    fontWeight: '800',
+    marginBottom: 5,
+    textShadowColor: 'rgba(0,0,0,0.7)',
+    textShadowRadius: 4,
+  },
   description: {
     color: 'white',
     fontSize: 16,
@@ -354,5 +419,11 @@ const styles = StyleSheet.create({
     fontSize: 15,
     fontWeight: '700',
     marginTop: 10,
+  },
+  loadingMore: {
+    height: FEED_ITEM_HEIGHT,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: '#000000',
   },
 });
