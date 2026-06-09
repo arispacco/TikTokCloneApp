@@ -19,6 +19,7 @@ jest.mock('../src/services/authService', () => ({
     login: jest.fn(),
     register: jest.fn(),
     logout: jest.fn(),
+    getUserProfile: jest.fn(),
   },
 }));
 
@@ -29,6 +30,7 @@ let authCallback: ((user: unknown) => void) | undefined;
 beforeEach(() => {
   jest.clearAllMocks();
   authCallback = undefined;
+  (authService.getUserProfile as jest.Mock).mockResolvedValue(null);
   mockAuth.mockReturnValue({
     onAuthStateChanged: (cb: (user: unknown) => void) => {
       authCallback = cb;
@@ -75,7 +77,7 @@ describe('AuthProvider / useAuth', () => {
     handle.unmount();
   });
 
-  it('expose l\'utilisateur connecté quand onAuthStateChanged renvoie un user', () => {
+  it("expose l'utilisateur connecté quand onAuthStateChanged renvoie un user", () => {
     const handle = renderWithProvider();
 
     act(() => {
@@ -101,7 +103,7 @@ describe('AuthProvider / useAuth', () => {
     handle.unmount();
   });
 
-  it('useAuth lève une erreur hors d\'un AuthProvider', () => {
+  it("useAuth lève une erreur hors d'un AuthProvider", () => {
     const Orphan = () => {
       useAuth();
       return null;

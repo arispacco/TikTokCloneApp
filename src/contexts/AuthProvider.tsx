@@ -5,10 +5,9 @@ import React, {
   useMemo,
   useState,
 } from 'react';
-import auth, {
-  FirebaseAuthTypes,
-} from '@react-native-firebase/auth';
+import auth, { FirebaseAuthTypes } from '@react-native-firebase/auth';
 import { authService } from '../services/authService';
+import { User } from '../shared/contracts';
 import { logger } from '../utils/logger';
 
 /** Résultat standard d'une action d'authentification. */
@@ -20,6 +19,8 @@ export interface AuthActionResult {
 export interface AuthContextValue {
   /** Utilisateur Firebase courant (ou `null` si déconnecté). */
   user: FirebaseAuthTypes.User | null;
+  /** Profil applicatif Firestore du compte courant. */
+  profile: User | null;
   /** `true` tant que l'état d'auth initial n'est pas connu (splash). */
   initializing: boolean;
   /** `true` pendant une action login/register/logout en cours. */
@@ -43,6 +44,7 @@ export function AuthProvider({
   children: React.ReactNode;
 }): React.JSX.Element {
   const [user, setUser] = useState<FirebaseAuthTypes.User | null>(null);
+  const [profile, setProfile] = useState<User | null>(null);
   const [initializing, setInitializing] = useState<boolean>(true);
   const [loading, setLoading] = useState<boolean>(false);
 
@@ -54,6 +56,27 @@ export function AuthProvider({
     });
     return subscriber;
   }, []);
+
+  useEffect(() => {
+    let isMounted = true;
+
+    if (!user?.uid) {
+      setProfile(null);
+      return () => {
+        isMounted = false;
+      };
+    }
+
+    authService.getUserProfile(user.uid).then(nextProfile => {
+      if (isMounted) {
+        setProfile(nextProfile);
+      }
+    });
+
+    return () => {
+      isMounted = false;
+    };
+  }, [user?.uid]);
 
   const login = useCallback(
     async (email: string, password: string): Promise<AuthActionResult> => {
@@ -99,8 +122,8 @@ export function AuthProvider({
   }, []);
 
   const value = useMemo<AuthContextValue>(
-    () => ({ user, initializing, loading, login, register, logout }),
-    [user, initializing, loading, login, register, logout],
+    () => ({ user, profile, initializing, loading, login, register, logout }),
+    [user, profile, initializing, loading, login, register, logout],
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

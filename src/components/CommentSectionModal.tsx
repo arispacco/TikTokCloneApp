@@ -30,7 +30,7 @@ export default function CommentSectionModal({
   postId,
   onCommentAdded,
 }: CommentSectionModalProps): React.JSX.Element {
-  const { user } = useAuth();
+  const { user, profile } = useAuth();
   const [comments, setComments] = useState<Comment[]>([]);
   const [loading, setLoading] = useState<boolean>(true);
   const [newCommentText, setNewCommentText] = useState<string>('');
@@ -59,13 +59,17 @@ export default function CommentSectionModal({
     if (!user || !newCommentText.trim() || submitting) return;
 
     setSubmitting(true);
-    const username = user.displayName || user.email?.split('@')[0] || 'utilisateur';
-    
+    const username =
+      profile?.username ||
+      user.displayName ||
+      user.email?.split('@')[0] ||
+      'utilisateur';
+
     const success = await postService.addComment(
       postId,
       user.uid,
       username,
-      newCommentText
+      newCommentText,
     );
 
     if (success) {
@@ -101,10 +105,10 @@ export default function CommentSectionModal({
       onRequestClose={onClose}
     >
       <View style={styles.modalContainer}>
-        <TouchableOpacity 
-          style={styles.backdrop} 
-          activeOpacity={1} 
-          onPress={onClose} 
+        <TouchableOpacity
+          style={styles.backdrop}
+          activeOpacity={1}
+          onPress={onClose}
         />
         <KeyboardAvoidingView
           behavior={Platform.OS === 'ios' ? 'padding' : undefined}
@@ -131,8 +135,12 @@ export default function CommentSectionModal({
               contentContainerStyle={styles.listContent}
               ListEmptyComponent={
                 <View style={styles.centered}>
-                  <Text style={styles.emptyText}>Aucun commentaire pour le moment.</Text>
-                  <Text style={styles.emptySubtext}>Soyez le premier à commenter !</Text>
+                  <Text style={styles.emptyText}>
+                    Aucun commentaire pour le moment.
+                  </Text>
+                  <Text style={styles.emptySubtext}>
+                    Soyez le premier à commenter !
+                  </Text>
                 </View>
               }
             />
@@ -147,15 +155,19 @@ export default function CommentSectionModal({
               onChangeText={setNewCommentText}
               multiline
             />
-            <TouchableOpacity 
+            <TouchableOpacity
               style={[
-                styles.sendButton, 
-                (!newCommentText.trim() || submitting) && styles.sendButtonDisabled
+                styles.sendButton,
+                (!newCommentText.trim() || submitting) &&
+                  styles.sendButtonDisabled,
               ]}
               onPress={handleAddComment}
               disabled={!newCommentText.trim() || submitting}
             >
-              <Send color={newCommentText.trim() ? "#ff2d55" : "#ccc"} size={22} />
+              <Send
+                color={newCommentText.trim() ? '#ff2d55' : '#ccc'}
+                size={22}
+              />
             </TouchableOpacity>
           </View>
         </KeyboardAvoidingView>

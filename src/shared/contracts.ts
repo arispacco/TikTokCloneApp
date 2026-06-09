@@ -22,6 +22,7 @@ export interface Post {
   id: string;
   userId: string;
   videoUrl: string;
+  title?: string;
   description: string;
   likesCount: number;
   commentsCount: number;
@@ -32,6 +33,7 @@ export interface Post {
 export interface CreatePostInput {
   userId: string;
   videoLocalPath: string;
+  title?: string;
   description: string;
 }
 

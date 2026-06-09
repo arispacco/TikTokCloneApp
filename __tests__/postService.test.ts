@@ -47,7 +47,10 @@ describe('postService.toggleLike', () => {
     };
     tx.get
       .mockResolvedValueOnce({ exists: () => false }) // likeDoc
-      .mockResolvedValueOnce({ exists: () => true, data: () => ({ likesCount: 5 }) }); // postDoc
+      .mockResolvedValueOnce({
+        exists: () => true,
+        data: () => ({ likesCount: 5 }),
+      }); // postDoc
     const { postRef } = buildFirestore(tx);
 
     const result = await postService.toggleLike('post1', 'user1');
@@ -66,7 +69,10 @@ describe('postService.toggleLike', () => {
     };
     tx.get
       .mockResolvedValueOnce({ exists: () => true }) // likeDoc déjà présent
-      .mockResolvedValueOnce({ exists: () => true, data: () => ({ likesCount: 3 }) });
+      .mockResolvedValueOnce({
+        exists: () => true,
+        data: () => ({ likesCount: 3 }),
+      });
     const { postRef } = buildFirestore(tx);
 
     const result = await postService.toggleLike('post1', 'user1');
@@ -83,9 +89,10 @@ describe('postService.toggleLike', () => {
       update: jest.fn(),
       delete: jest.fn(),
     };
-    tx.get
-      .mockResolvedValueOnce({ exists: () => true })
-      .mockResolvedValueOnce({ exists: () => true, data: () => ({ likesCount: 0 }) });
+    tx.get.mockResolvedValueOnce({ exists: () => true }).mockResolvedValueOnce({
+      exists: () => true,
+      data: () => ({ likesCount: 0 }),
+    });
     const { postRef } = buildFirestore(tx);
 
     await postService.toggleLike('post1', 'user1');
@@ -93,7 +100,7 @@ describe('postService.toggleLike', () => {
     expect(tx.update).toHaveBeenCalledWith(postRef, { likesCount: 0 });
   });
 
-  it('renvoie { success: false, liked: false } si le post n\'existe plus', async () => {
+  it("renvoie { success: false, liked: false } si le post n'existe plus", async () => {
     const tx = {
       get: jest.fn(),
       set: jest.fn(),
@@ -123,6 +130,7 @@ describe('postService.createPost', () => {
     const result = await postService.createPost({
       userId: 'user1',
       videoLocalPath: '/tmp/v.mp4',
+      title: '  Titre  ',
       description: '  Hello  ',
     });
 
@@ -133,13 +141,14 @@ describe('postService.createPost', () => {
       id: 'newPost',
       userId: 'user1',
       videoUrl: 'https://cloud/video.mp4',
+      title: 'Titre',
       description: 'Hello',
       likesCount: 0,
       commentsCount: 0,
     });
   });
 
-  it('échoue proprement si l\'upload renvoie null', async () => {
+  it("échoue proprement si l'upload renvoie null", async () => {
     const set = jest.fn();
     const postRef = { id: 'newPost', set };
     mockFirestore.mockReturnValue({
@@ -198,5 +207,45 @@ describe('postService.getFeed', () => {
     });
 
     await expect(postService.getFeed()).rejects.toThrow('boom');
+  });
+});
+
+describe('postService.addComment', () => {
+  it('écrit le commentaire et incrémente commentsCount', async () => {
+    const tx = {
+      get: jest.fn().mockResolvedValue({
+        exists: () => true,
+        data: () => ({ commentsCount: 2 }),
+      }),
+      set: jest.fn(),
+      update: jest.fn(),
+    };
+    const commentRef = { ref: 'comment' };
+    const postRef = {
+      ref: 'post',
+      collection: () => ({ doc: () => commentRef }),
+    };
+    mockFirestore.mockReturnValue({
+      collection: () => ({ doc: () => postRef }),
+      runTransaction: (cb: any) => cb(tx),
+    });
+
+    const result = await postService.addComment(
+      'post1',
+      'user1',
+      'alice',
+      '  Salut  ',
+    );
+
+    expect(result).toBe(true);
+    expect(tx.set).toHaveBeenCalledWith(
+      commentRef,
+      expect.objectContaining({
+        userId: 'user1',
+        username: 'alice',
+        text: 'Salut',
+      }),
+    );
+    expect(tx.update).toHaveBeenCalledWith(postRef, { commentsCount: 3 });
   });
 });

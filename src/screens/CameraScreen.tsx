@@ -13,6 +13,8 @@ import {
 import { Camera, useCameraDevice } from 'react-native-vision-camera';
 import auth from '@react-native-firebase/auth';
 import { useIsFocused } from '@react-navigation/native';
+import { BottomTabNavigationProp } from '@react-navigation/bottom-tabs';
+import { useNavigation } from '@react-navigation/native';
 import {
   Archive,
   ArrowLeft,
@@ -37,6 +39,7 @@ import {
   Zap,
 } from 'lucide-react-native';
 import { postService } from '../services/postService';
+import { MainTabsParamList } from '../navigation/types';
 import { logger } from '../utils/logger';
 
 const { width } = Dimensions.get('window');
@@ -52,9 +55,17 @@ const cameraTools = [
 ];
 
 const publishOptions = [
-  { id: 'disclosure', label: 'Divulgation de contenu et publicités', icon: Archive },
+  {
+    id: 'disclosure',
+    label: 'Divulgation de contenu et publicités',
+    icon: Archive,
+  },
   { id: 'link', label: 'Ajouter un lien', icon: Link },
-  { id: 'visibility', label: 'Tout le monde peut voir cette publication', icon: Globe2 },
+  {
+    id: 'visibility',
+    label: 'Tout le monde peut voir cette publication',
+    icon: Globe2,
+  },
   { id: 'more', label: "Plus d'options", icon: Settings },
   { id: 'share', label: 'Partager sur', icon: Share2 },
 ];
@@ -63,6 +74,8 @@ export default function CameraScreen(): React.JSX.Element {
   const cameraRef = useRef<Camera>(null);
   const device = useCameraDevice('back');
   const isFocused = useIsFocused();
+  const navigation =
+    useNavigation<BottomTabNavigationProp<MainTabsParamList, 'Create'>>();
 
   const [hasPermission, setHasPermission] = useState<boolean>(false);
   const [isRecording, setIsRecording] = useState<boolean>(false);
@@ -91,6 +104,7 @@ export default function CameraScreen(): React.JSX.Element {
       setIsRecording(true);
       cameraRef.current.startRecording({
         onRecordingFinished: video => {
+          setIsRecording(false);
           setVideoLocalPath(video.path);
         },
         onRecordingError: error => {
@@ -117,6 +131,7 @@ export default function CameraScreen(): React.JSX.Element {
       const result = await postService.createPost({
         userId,
         videoLocalPath,
+        title,
         description,
       });
 
@@ -174,7 +189,7 @@ export default function CameraScreen(): React.JSX.Element {
           <View style={styles.topBar}>
             <TouchableOpacity
               style={styles.closeButton}
-              onPress={() => logger.debug('Fermer la camera')}
+              onPress={() => navigation.navigate('Home')}
               accessibilityRole="button"
               accessibilityLabel="Fermer la camera"
             >
@@ -210,7 +225,9 @@ export default function CameraScreen(): React.JSX.Element {
             <View style={styles.modeRow}>
               <Text style={styles.modeText}>60 s</Text>
               <Text style={styles.modeText}>15 s</Text>
-              <Text style={[styles.modeText, styles.activeModeText]}>PHOTO</Text>
+              <Text style={[styles.modeText, styles.activeModeText]}>
+                PHOTO
+              </Text>
               <Text style={styles.modeText}>TEXTE</Text>
             </View>
 
