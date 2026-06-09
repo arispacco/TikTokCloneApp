@@ -23,6 +23,7 @@ import { postService } from '../services/postService';
 import { Post } from '../shared/contracts';
 import { getErrorMessage, logger } from '../utils/logger';
 import VideoPlayer from '../components/VideoPlayer';
+import OverlayActions from '../components/OverlayActions';
 
 const { height, width } = Dimensions.get('window');
 const TAB_BAR_HEIGHT = 66;
@@ -151,77 +152,15 @@ export default function FeedScreen(): React.JSX.Element {
             <Text style={styles.translationText}>Voir la traduction</Text>
           </View>
 
-          <View style={styles.rightSidebar}>
-            <TouchableOpacity
-              style={styles.avatarButton}
-              onPress={() => logger.debug('Ouvrir le profil createur')}
-              accessibilityRole="button"
-              accessibilityLabel={`Ouvrir le profil de ${username}`}
-            >
-              <View style={styles.avatarCircle}>
-                <Text style={styles.avatarInitials}>
-                  {username.substring(0, 2).toUpperCase()}
-                </Text>
-              </View>
-              <View style={styles.followBadge}>
-                <Plus color="#ffffff" size={18} strokeWidth={3} />
-              </View>
-            </TouchableOpacity>
-
-            <TouchableOpacity
-              style={styles.actionButton}
-              onPress={() => handleLike(item.id)}
-              accessibilityRole="button"
-              accessibilityLabel={`Aimer la vidéo, ${item.likesCount} j'aime`}
-            >
-              <Heart
-                color="#ffffff"
-                fill="#ffffff"
-                size={38}
-                strokeWidth={2.4}
-                style={styles.actionIcon}
-              />
-              <Text style={styles.actionLabel}>{formatCount(item.likesCount)}</Text>
-            </TouchableOpacity>
-
-            <TouchableOpacity
-              style={styles.actionButton}
-              onPress={() => logger.debug('Ouvrir les commentaires')}
-              accessibilityRole="button"
-              accessibilityLabel="Voir les commentaires"
-            >
-              <MessageCircle
-                color="#ffffff"
-                fill="#ffffff"
-                size={36}
-                strokeWidth={2.4}
-                style={styles.actionIcon}
-              />
-              <Text style={styles.actionLabel}>
-                {formatCount(item.commentsCount)}
-              </Text>
-            </TouchableOpacity>
-
-            <TouchableOpacity
-              style={styles.actionButton}
-              onPress={() => logger.debug('Partager la vidéo')}
-              accessibilityRole="button"
-              accessibilityLabel="Partager la vidéo"
-            >
-              <Send
-                color="#ffffff"
-                fill="#ffffff"
-                size={35}
-                strokeWidth={2.2}
-                style={styles.actionIcon}
-              />
-              <Text style={styles.actionLabel}>Partager</Text>
-            </TouchableOpacity>
-
-            <View style={styles.musicDisc}>
-              <Music color="#ffffff" size={20} strokeWidth={2.4} />
-            </View>
-          </View>
+          <OverlayActions
+            likesCount={item.likesCount}
+            commentsCount={item.commentsCount}
+            username={username}
+            onLike={() => handleLike(item.id)}
+            onComment={() => logger.debug('Ouvrir les commentaires')}
+            onShare={() => logger.debug('Partager la vidéo')}
+            onProfile={() => logger.debug('Ouvrir le profil createur')}
+          />
         </View>
       );
     },
@@ -260,6 +199,8 @@ export default function FeedScreen(): React.JSX.Element {
         data={videos}
         renderItem={renderVideoItem}
         keyExtractor={item => item.id}
+        pagingEnabled={true}
+        windowSize={3}
         snapToInterval={FEED_ITEM_HEIGHT}
         snapToAlignment="start"
         decelerationRate="fast"
@@ -386,56 +327,5 @@ const styles = StyleSheet.create({
     fontSize: 15,
     fontWeight: '700',
     marginTop: 10,
-  },
-  rightSidebar: {
-    position: 'absolute',
-    bottom: 24,
-    right: 14,
-    alignItems: 'center',
-  },
-  avatarButton: {
-    width: 58,
-    height: 68,
-    alignItems: 'center',
-    marginBottom: 12,
-  },
-  avatarCircle: {
-    width: 54,
-    height: 54,
-    borderRadius: 27,
-    borderWidth: 2,
-    borderColor: '#ffffff',
-    backgroundColor: '#252525',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  avatarInitials: { color: '#ffffff', fontSize: 17, fontWeight: '900' },
-  followBadge: {
-    position: 'absolute',
-    bottom: 0,
-    width: 26,
-    height: 26,
-    borderRadius: 13,
-    backgroundColor: '#ff2d55',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  actionButton: { alignItems: 'center', marginBottom: 18, width: 64 },
-  actionIcon: { marginBottom: 5 },
-  actionLabel: {
-    color: 'white',
-    fontSize: 12,
-    fontWeight: '800',
-    textAlign: 'center',
-  },
-  musicDisc: {
-    width: 48,
-    height: 48,
-    borderRadius: 24,
-    backgroundColor: '#111111',
-    borderWidth: 8,
-    borderColor: '#2b2b2b',
-    alignItems: 'center',
-    justifyContent: 'center',
   },
 });
