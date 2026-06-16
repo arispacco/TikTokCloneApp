@@ -60,14 +60,19 @@ jest.mock('react-native-image-picker', () => ({
   launchCamera: jest.fn(),
 }));
 
-jest.mock('react-native-document-picker', () => ({
+jest.mock('@react-native-documents/picker', () => ({
   pick: jest.fn(),
-  pickSingle: jest.fn(),
+  pickDirectory: jest.fn(),
   types: {
     audio: 'audio',
     images: 'images',
     video: 'video',
     allFiles: 'allFiles',
   },
+  errorCodes: {
+    IN_PROGRESS: 'IN_PROGRESS',
+    USER_CANCELED: 'USER_CANCELED',
+  },
+  isErrorWithCode: jest.fn(),
 }));
 
