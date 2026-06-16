@@ -8,16 +8,21 @@ import {
   TouchableOpacity,
   ActivityIndicator,
   ViewToken,
+  TextInput,
+  Share,
 } from 'react-native';
 import auth from '@react-native-firebase/auth';
-import { useIsFocused } from '@react-navigation/native';
-import { Search } from 'lucide-react-native';
+import firestore from '@react-native-firebase/firestore';
+import { useIsFocused, useNavigation } from '@react-navigation/native';
+import { BottomTabNavigationProp } from '@react-navigation/bottom-tabs';
+import { Search, X } from 'lucide-react-native';
 import { FeedCursor, postService } from '../services/postService';
 import { Post } from '../shared/contracts';
 import { getErrorMessage, logger } from '../utils/logger';
 import VideoPlayer from '../components/VideoPlayer';
 import OverlayActions from '../components/OverlayActions';
 import CommentSectionModal from '../components/CommentSectionModal';
+import { MainTabsParamList } from '../navigation/types';
 
 const { height, width } = Dimensions.get('window');
 const TAB_BAR_HEIGHT = 66;
@@ -42,7 +47,14 @@ export default function FeedScreen(): React.JSX.Element {
   const [hasMoreFeed, setHasMoreFeed] = useState<boolean>(true);
   const [loadingMoreFeed, setLoadingMoreFeed] = useState<boolean>(false);
 
+  // Nouveaux états pour les fonctionnalités tactiles et interactives
+  const [likedPosts, setLikedPosts] = useState<Record<string, boolean>>({});
+  const [activeTab, setActiveTab] = useState<'pour-toi' | 'suivis'>('pour-toi');
+  const [isSearching, setIsSearching] = useState<boolean>(false);
+  const [searchQuery, setSearchQuery] = useState<string>('');
+
   const isFocused = useIsFocused();
+  const navigation = useNavigation<BottomTabNavigationProp<MainTabsParamList>>();
 
   const loadFeedData = useCallback(async () => {
     setLoading(true);
@@ -65,6 +77,33 @@ export default function FeedScreen(): React.JSX.Element {
   useEffect(() => {
     loadFeedData();
   }, [loadFeedData]);
+
+  // Récupère le statut du like pour le post actif dès qu'il est visible
+  useEffect(() => {
+    if (!activePostId) return;
+    const userId = auth().currentUser?.uid;
+    if (!userId) return;
+
+    if (likedPosts[activePostId] === undefined) {
+      const checkLike = async () => {
+        try {
+          const likeDoc = await firestore()
+            .collection('posts')
+            .doc(activePostId)
+            .collection('likes')
+            .doc(userId)
+            .get();
+          const isLiked = typeof likeDoc.exists === 'function' 
+            ? (likeDoc.exists as Function)() 
+            : !!likeDoc.exists;
+          setLikedPosts(prev => ({ ...prev, [activePostId]: isLiked }));
+        } catch (err) {
+          logger.error('Erreur verification like :', err);
+        }
+      };
+      checkLike();
+    }
+  }, [activePostId, likedPosts]);
 
   const loadMoreFeedData = useCallback(async () => {
     if (loading || loadingMoreFeed || !hasMoreFeed || !lastFeedCursor) {
@@ -118,33 +157,119 @@ export default function FeedScreen(): React.JSX.Element {
       return;
     }
 
-    const result = await postService.toggleLike(postId, userId);
-    if (!result.success) {
-      return;
-    }
+    const isCurrentlyLiked = likedPosts[postId] || false;
+    const nextLikedState = !isCurrentlyLiked;
 
-    // Ajuste le compteur de +1 / -1 selon l'état réel renvoyé par le service.
+    // Mise à jour optimiste de l'UI
+    setLikedPosts(prev => ({ ...prev, [postId]: nextLikedState }));
     setVideos(prevVideos =>
       prevVideos.map(video => {
         if (video.id !== postId) {
           return video;
         }
-        const delta = result.liked ? 1 : -1;
+        const delta = nextLikedState ? 1 : -1;
         return {
           ...video,
           likesCount: Math.max(0, video.likesCount + delta),
         };
       }),
     );
+
+    const result = await postService.toggleLike(postId, userId);
+    if (!result.success) {
+      // Revenir en arrière en cas d'erreur de transaction
+      setLikedPosts(prev => ({ ...prev, [postId]: isCurrentlyLiked }));
+      setVideos(prevVideos =>
+        prevVideos.map(video => {
+          if (video.id !== postId) {
+            return video;
+          }
+          const delta = isCurrentlyLiked ? 1 : -1;
+          return {
+            ...video,
+            likesCount: Math.max(0, video.likesCount + delta),
+          };
+        }),
+      );
+    }
+  }, [likedPosts]);
+
+  const handleDoubleTapLike = useCallback(async (postId: string) => {
+    const userId = auth().currentUser?.uid;
+    if (!userId) return;
+
+    if (likedPosts[postId]) {
+      return;
+    }
+
+    setLikedPosts(prev => ({ ...prev, [postId]: true }));
+    setVideos(prevVideos =>
+      prevVideos.map(video => {
+        if (video.id !== postId) {
+          return video;
+        }
+        return {
+          ...video,
+          likesCount: video.likesCount + 1,
+        };
+      }),
+    );
+
+    const result = await postService.toggleLike(postId, userId);
+    if (!result.success || !result.liked) {
+      setLikedPosts(prev => ({ ...prev, [postId]: false }));
+      setVideos(prevVideos =>
+        prevVideos.map(video => {
+          if (video.id !== postId) {
+            return video;
+          }
+          return {
+            ...video,
+            likesCount: Math.max(0, video.likesCount - 1),
+          };
+        }),
+      );
+    }
+  }, [likedPosts]);
+
+  const handleShare = useCallback(async (post: Post) => {
+    try {
+      await Share.share({
+        message: `Regarde cette vidéo TikTokClone :\n"${post.description}"\nRegarder ici : ${post.videoUrl}`,
+      });
+    } catch (err) {
+      logger.error('Erreur partage :', err);
+    }
   }, []);
+
+  const handleProfileNavigation = useCallback((creatorId: string) => {
+    navigation.navigate('Profile', { userId: creatorId });
+  }, [navigation]);
+
+  const filteredVideos = React.useMemo(() => {
+    let list = videos;
+    const currentUserId = auth().currentUser?.uid;
+
+    if (activeTab === 'suivis' && currentUserId) {
+      list = list.filter(v => v.userId !== currentUserId);
+    }
+
+    if (searchQuery.trim()) {
+      const q = searchQuery.toLowerCase().trim();
+      list = list.filter(
+        v =>
+          v.description.toLowerCase().includes(q) ||
+          (v.title && v.title.toLowerCase().includes(q))
+        );
+    }
+    return list;
+  }, [videos, activeTab, searchQuery]);
 
   const renderVideoItem = useCallback(
     ({ item, index }: { item: Post; index: number }) => {
       const creatorSuffix = item.userId.substring(0, 5);
       const username = `utilisateur_${creatorSuffix}`;
 
-      // On ne monte le composant Video que si l'item est visible ou juste à côté (index ± 1)
-      // Cela permet de précharger la vidéo suivante tout en libérant la RAM des vidéos lointaines.
       const shouldRender = Math.abs(index - activeIndex) <= 1;
 
       return (
@@ -153,26 +278,60 @@ export default function FeedScreen(): React.JSX.Element {
             videoUrl={item.videoUrl}
             isActive={isFocused && item.id === activePostId}
             shouldRender={shouldRender}
+            onDoubleTap={() => handleDoubleTapLike(item.id)}
           />
 
           <View style={styles.topOverlay}>
-            <View style={styles.livePill}>
-              <Text style={styles.liveText}>LIVE</Text>
-            </View>
-            <Text style={styles.topTab}>Communauté</Text>
-            <Text style={styles.topTab}>Suivis</Text>
-            <View style={styles.activeTabWrap}>
-              <Text style={[styles.topTab, styles.activeTopTab]}>Pour toi</Text>
-              <View style={styles.activeTabIndicator} />
-            </View>
-            <TouchableOpacity
-              style={styles.searchButton}
-              onPress={() => logger.debug('Ouvrir la recherche')}
-              accessibilityRole="button"
-              accessibilityLabel="Rechercher"
-            >
-              <Search color="#ffffff" size={33} strokeWidth={2.4} />
-            </TouchableOpacity>
+            {isSearching ? (
+              <View style={styles.searchHeader}>
+                <TextInput
+                  style={styles.searchInput}
+                  placeholder="Rechercher..."
+                  placeholderTextColor="#bbbbbb"
+                  value={searchQuery}
+                  onChangeText={setSearchQuery}
+                  autoFocus={true}
+                />
+                <TouchableOpacity
+                  style={styles.cancelSearchButton}
+                  onPress={() => {
+                    setIsSearching(false);
+                    setSearchQuery('');
+                  }}
+                >
+                  <X color="#ffffff" size={26} />
+                </TouchableOpacity>
+              </View>
+            ) : (
+              <>
+                <View style={styles.livePill}>
+                  <Text style={styles.liveText}>LIVE</Text>
+                </View>
+                
+                <TouchableOpacity onPress={() => setActiveTab('suivis')}>
+                  <View style={styles.tabContainer}>
+                    <Text style={[styles.topTab, activeTab === 'suivis' && styles.activeTopTab]}>Suivis</Text>
+                    {activeTab === 'suivis' && <View style={styles.activeTabIndicator} />}
+                  </View>
+                </TouchableOpacity>
+
+                <TouchableOpacity onPress={() => setActiveTab('pour-toi')}>
+                  <View style={styles.tabContainer}>
+                    <Text style={[styles.topTab, activeTab === 'pour-toi' && styles.activeTopTab]}>Pour toi</Text>
+                    {activeTab === 'pour-toi' && <View style={styles.activeTabIndicator} />}
+                  </View>
+                </TouchableOpacity>
+
+                <TouchableOpacity
+                  style={styles.searchButton}
+                  onPress={() => setIsSearching(true)}
+                  accessibilityRole="button"
+                  accessibilityLabel="Rechercher"
+                >
+                  <Search color="#ffffff" size={33} strokeWidth={2.4} />
+                </TouchableOpacity>
+              </>
+            )}
           </View>
 
           <View style={styles.bottomOverlay}>
@@ -192,18 +351,19 @@ export default function FeedScreen(): React.JSX.Element {
             likesCount={item.likesCount}
             commentsCount={item.commentsCount}
             username={username}
+            isLiked={!!likedPosts[item.id]}
             onLike={() => handleLike(item.id)}
             onComment={() => {
               setSelectedPostIdForComment(item.id);
               setIsCommentModalVisible(true);
             }}
-            onShare={() => logger.debug('Partager la vidéo')}
-            onProfile={() => logger.debug('Ouvrir le profil createur')}
+            onShare={() => handleShare(item)}
+            onProfile={() => handleProfileNavigation(item.userId)}
           />
         </View>
       );
     },
-    [activeIndex, activePostId, isFocused, handleLike],
+    [activeIndex, activePostId, isFocused, handleLike, handleDoubleTapLike, handleShare, handleProfileNavigation, isSearching, searchQuery, activeTab, likedPosts],
   );
 
   const handleCommentAdded = useCallback(() => {
@@ -248,7 +408,7 @@ export default function FeedScreen(): React.JSX.Element {
   return (
     <View style={styles.container}>
       <FlatList
-        data={videos}
+        data={filteredVideos}
         renderItem={renderVideoItem}
         keyExtractor={item => item.id}
         pagingEnabled={true}
@@ -425,5 +585,32 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
     backgroundColor: '#000000',
+  },
+  tabContainer: {
+    alignItems: 'center',
+    marginRight: 18,
+    position: 'relative',
+  },
+  searchHeader: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'rgba(255,255,255,0.18)',
+    borderRadius: 20,
+    paddingHorizontal: 12,
+    height: 38,
+    marginRight: 10,
+  },
+  searchInput: {
+    flex: 1,
+    color: '#ffffff',
+    fontSize: 16,
+    padding: 0,
+    fontWeight: '600',
+  },
+  cancelSearchButton: {
+    paddingHorizontal: 4,
+    justifyContent: 'center',
+    alignItems: 'center',
   },
 });

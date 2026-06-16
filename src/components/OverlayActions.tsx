@@ -6,6 +6,7 @@ interface OverlayActionsProps {
   likesCount: number;
   commentsCount: number;
   username: string;
+  isLiked?: boolean;
   onLike: () => void;
   onComment?: () => void;
   onShare?: () => void;
@@ -26,6 +27,7 @@ export default function OverlayActions({
   likesCount,
   commentsCount,
   username,
+  isLiked = false,
   onLike,
   onComment,
   onShare,
@@ -56,8 +58,8 @@ export default function OverlayActions({
         accessibilityLabel={`Aimer la vidéo, ${likesCount} j'aime`}
       >
         <Heart
-          color="#ffffff"
-          fill="#ffffff"
+          color={isLiked ? '#ff2d55' : '#ffffff'}
+          fill={isLiked ? '#ff2d55' : 'rgba(0,0,0,0.15)'}
           size={38}
           strokeWidth={2.4}
           style={styles.actionIcon}

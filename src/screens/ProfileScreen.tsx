@@ -9,39 +9,62 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native';
-import { Grid3X3, LogOut, Play, User as UserIcon } from 'lucide-react-native';
+import { ArrowLeft, Grid3X3, LogOut, Play, User as UserIcon } from 'lucide-react-native';
 import { useAuth } from '../hooks/useAuth';
+import { useRoute, useNavigation, RouteProp } from '@react-navigation/native';
 import { postService } from '../services/postService';
-import { Post } from '../shared/contracts';
+import { authService } from '../services/authService';
+import { Post, User } from '../shared/contracts';
 import { logger } from '../utils/logger';
+import { MainTabsParamList } from '../navigation/types';
 
 const { width } = Dimensions.get('window');
 const COLUMN_WIDTH = width / 3;
 
 export default function ProfileScreen(): React.JSX.Element {
   const { user, profile, logout, loading: authLoading } = useAuth();
+  const route = useRoute<RouteProp<MainTabsParamList, 'Profile'>>();
+  const navigation = useNavigation();
+
+  const targetUserId = route.params?.userId || user?.uid;
+  const isOwnProfile = !route.params?.userId || route.params?.userId === user?.uid;
+
   const [posts, setPosts] = useState<Post[]>([]);
   const [loading, setLoading] = useState<boolean>(true);
+  const [profileData, setProfileData] = useState<User | null>(null);
+  const [profileLoading, setProfileLoading] = useState<boolean>(true);
+  const [isFollowing, setIsFollowing] = useState<boolean>(false);
 
-  const fetchUserContent = useCallback(async () => {
-    if (!user?.uid) return;
+  const fetchProfileAndContent = useCallback(async () => {
+    if (!targetUserId) return;
     setLoading(true);
+    setProfileLoading(true);
     try {
-      const userPosts = await postService.getUserPosts(user.uid);
+      // 1. Charger les posts de l'utilisateur
+      const userPosts = await postService.getUserPosts(targetUserId);
       setPosts(userPosts);
+
+      // 2. Charger le profil de l'utilisateur
+      if (isOwnProfile) {
+        setProfileData(profile);
+      } else {
+        const fetchedProfile = await authService.getUserProfile(targetUserId);
+        setProfileData(fetchedProfile);
+      }
     } catch (error) {
       logger.error(
-        'Erreur lors de la recuperation des posts utilisateur',
+        'Erreur lors de la recuperation des posts/profil utilisateur',
         error,
       );
     } finally {
       setLoading(false);
+      setProfileLoading(false);
     }
-  }, [user?.uid]);
+  }, [targetUserId, isOwnProfile, profile]);
 
   useEffect(() => {
-    fetchUserContent();
-  }, [fetchUserContent]);
+    fetchProfileAndContent();
+  }, [fetchProfileAndContent]);
 
   const handleLogout = async () => {
     const result = await logout();
@@ -51,6 +74,19 @@ export default function ProfileScreen(): React.JSX.Element {
         result.error ?? 'Reessaie plus tard.',
       );
     }
+  };
+
+  const handleFollowToggle = () => {
+    setIsFollowing(prev => {
+      const nextState = !prev;
+      if (profileData) {
+        setProfileData({
+          ...profileData,
+          followersCount: profileData.followersCount + (nextState ? 1 : -1),
+        });
+      }
+      return nextState;
+    });
   };
 
   const totalLikes = posts.reduce(
@@ -83,49 +119,77 @@ export default function ProfileScreen(): React.JSX.Element {
         numColumns={3}
         ListHeaderComponent={
           <View style={styles.header}>
-            <Text style={styles.headerTitle}>Profil</Text>
+            <View style={styles.headerTopBar}>
+              {!isOwnProfile && (
+                <TouchableOpacity
+                  onPress={() => navigation.goBack()}
+                  style={styles.backButton}
+                  accessibilityRole="button"
+                  accessibilityLabel="Retour"
+                >
+                  <ArrowLeft color="#ffffff" size={28} />
+                </TouchableOpacity>
+              )}
+              <Text style={styles.headerTitle}>Profil</Text>
+            </View>
 
             <View style={styles.avatar}>
               <UserIcon color="#ffffff" size={54} strokeWidth={2.2} />
             </View>
 
-            <Text style={styles.username}>
-              @
-              {profile?.username ??
-                user?.displayName ??
-                user?.email?.split('@')[0] ??
-                'utilisateur'}
-            </Text>
-            <Text style={styles.email}>
-              {profile?.email ?? user?.email ?? 'Compte connecte'}
-            </Text>
-
-            <View style={styles.stats}>
-              <View style={styles.statItem}>
-                <Text style={styles.statValue}>
-                  {profile?.followingCount ?? 0}
+            {profileLoading ? (
+              <ActivityIndicator color="#ff2d55" style={{ marginTop: 20 }} />
+            ) : (
+              <>
+                <Text style={styles.username}>
+                  @
+                  {profileData?.username ?? 'utilisateur'}
                 </Text>
-                <Text style={styles.statLabel}>Abonnements</Text>
-              </View>
-              <View style={styles.statItem}>
-                <Text style={styles.statValue}>
-                  {profile?.followersCount ?? 0}
+                <Text style={styles.email}>
+                  {profileData?.email ?? (isOwnProfile ? user?.email : 'Compte connecté')}
                 </Text>
-                <Text style={styles.statLabel}>Abonnes</Text>
-              </View>
-              <View style={styles.statItem}>
-                <Text style={styles.statValue}>{totalLikes}</Text>
-                <Text style={styles.statLabel}>J'aime</Text>
-              </View>
-            </View>
 
-            <TouchableOpacity
-              style={styles.editButton}
-              accessibilityRole="button"
-              accessibilityLabel="Modifier le profil"
-            >
-              <Text style={styles.editButtonText}>Modifier le profil</Text>
-            </TouchableOpacity>
+                <View style={styles.stats}>
+                  <View style={styles.statItem}>
+                    <Text style={styles.statValue}>
+                      {profileData?.followingCount ?? 0}
+                    </Text>
+                    <Text style={styles.statLabel}>Abonnements</Text>
+                  </View>
+                  <View style={styles.statItem}>
+                    <Text style={styles.statValue}>
+                      {profileData?.followersCount ?? 0}
+                    </Text>
+                    <Text style={styles.statLabel}>Abonnes</Text>
+                  </View>
+                  <View style={styles.statItem}>
+                    <Text style={styles.statValue}>{totalLikes}</Text>
+                    <Text style={styles.statLabel}>J'aime</Text>
+                  </View>
+                </View>
+
+                {!isOwnProfile ? (
+                  <TouchableOpacity
+                    style={[styles.followButton, isFollowing && styles.followingButton]}
+                    onPress={handleFollowToggle}
+                    accessibilityRole="button"
+                    accessibilityLabel={isFollowing ? 'Se désabonner' : "S'abonner"}
+                  >
+                    <Text style={styles.followButtonText}>
+                      {isFollowing ? 'Abonné' : "S'abonner"}
+                    </Text>
+                  </TouchableOpacity>
+                ) : (
+                  <TouchableOpacity
+                    style={styles.editButton}
+                    accessibilityRole="button"
+                    accessibilityLabel="Modifier le profil"
+                  >
+                    <Text style={styles.editButtonText}>Modifier le profil</Text>
+                  </TouchableOpacity>
+                )}
+              </>
+            )}
 
             <View style={styles.gridHeader}>
               <Grid3X3 color="#ffffff" size={24} strokeWidth={2.4} />
@@ -149,20 +213,22 @@ export default function ProfileScreen(): React.JSX.Element {
           )
         }
         ListFooterComponent={
-          <View style={styles.footer}>
-            <TouchableOpacity
-              style={styles.logoutButton}
-              onPress={handleLogout}
-              disabled={authLoading}
-              accessibilityRole="button"
-              accessibilityLabel="Se deconnecter"
-            >
-              <LogOut color="#ffffff" size={20} strokeWidth={2.3} />
-              <Text style={styles.logoutText}>
-                {authLoading ? 'Deconnexion...' : 'Se deconnecter'}
-              </Text>
-            </TouchableOpacity>
-          </View>
+          isOwnProfile ? (
+            <View style={styles.footer}>
+              <TouchableOpacity
+                style={styles.logoutButton}
+                onPress={handleLogout}
+                disabled={authLoading}
+                accessibilityRole="button"
+                accessibilityLabel="Se deconnecter"
+              >
+                <LogOut color="#ffffff" size={20} strokeWidth={2.3} />
+                <Text style={styles.logoutText}>
+                  {authLoading ? 'Deconnexion...' : 'Se deconnecter'}
+                </Text>
+              </TouchableOpacity>
+            </View>
+          ) : null
         }
       />
     </View>
@@ -288,5 +354,39 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: '700',
     marginLeft: 8,
+  },
+  headerTopBar: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    width: '100%',
+    position: 'relative',
+    marginBottom: 20,
+  },
+  backButton: {
+    position: 'absolute',
+    left: 0,
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 4,
+  },
+  followButton: {
+    width: 160,
+    height: 44,
+    borderRadius: 4,
+    backgroundColor: '#ff2d55',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginTop: 20,
+  },
+  followingButton: {
+    backgroundColor: '#242424',
+    borderWidth: 1,
+    borderColor: '#3a3a3a',
+  },
+  followButtonText: {
+    color: '#ffffff',
+    fontSize: 15,
+    fontWeight: '700',
   },
 });

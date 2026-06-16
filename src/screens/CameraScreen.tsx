@@ -12,6 +12,7 @@ import {
 } from 'react-native';
 import { Camera, useCameraDevice } from 'react-native-vision-camera';
 import auth from '@react-native-firebase/auth';
+import firestore from '@react-native-firebase/firestore';
 import { useIsFocused } from '@react-navigation/native';
 import { BottomTabNavigationProp } from '@react-navigation/bottom-tabs';
 import { useNavigation } from '@react-navigation/native';
@@ -83,6 +84,132 @@ export default function CameraScreen(): React.JSX.Element {
   const [title, setTitle] = useState<string>('');
   const [description, setDescription] = useState<string>('');
   const [isUploading, setIsUploading] = useState<boolean>(false);
+
+  // Nouveaux états interactifs
+  const [selectedSound, setSelectedSound] = useState<string>('');
+
+  const clearDraftInDb = async (userId: string) => {
+    try {
+      await firestore().collection('users').doc(userId).update({
+        draft: null
+      });
+    } catch (err) {
+      logger.error('Erreur effacement brouillon :', err);
+    }
+  };
+
+  const checkDraft = async () => {
+    const userId = auth().currentUser?.uid;
+    if (!userId) return;
+    try {
+      const doc = await firestore().collection('users').doc(userId).get();
+      const userData = doc.data();
+      if (userData?.draft) {
+        Alert.alert(
+          'Brouillon trouvé 📁',
+          'Tu as un brouillon enregistré. Souhaites-tu le restaurer ?',
+          [
+            {
+              text: 'Ignorer',
+              onPress: () => clearDraftInDb(userId),
+              style: 'cancel',
+            },
+            {
+              text: 'Restaurer',
+              onPress: () => {
+                setTitle(userData.draft.title || '');
+                setDescription(userData.draft.description || '');
+                setVideoLocalPath(userData.draft.videoLocalPath || '');
+                clearDraftInDb(userId);
+              },
+            },
+          ]
+        );
+      }
+    } catch (err) {
+      logger.error('Erreur verification brouillon :', err);
+    }
+  };
+
+  useEffect(() => {
+    if (isFocused) {
+      checkDraft();
+    }
+  }, [isFocused]);
+
+  const handleSelectSound = () => {
+    Alert.alert(
+      'Ajouter un son 🎵',
+      'Sélectionne une piste audio pour ta vidéo :',
+      [
+        { text: 'Annuler', style: 'cancel' },
+        { text: 'Chill Lo-Fi 🎧', onPress: () => setSelectedSound('Chill Lo-Fi 🎧') },
+        { text: 'Dance Pop 🎸', onPress: () => setSelectedSound('Dance Pop 🎸') },
+        { text: 'Acoustic Sunset 🎶', onPress: () => setSelectedSound('Acoustic Sunset 🎶') },
+      ]
+    );
+  };
+
+  const handleSelectGalleryVideo = () => {
+    Alert.alert(
+      'Ouvrir la galerie 🎬',
+      'Sélectionne une vidéo de test à importer :',
+      [
+        { text: 'Annuler', style: 'cancel' },
+        { text: 'Chatons mignons 🐱', onPress: () => setVideoLocalPath('https://www.w3schools.com/html/mov_bbb.mp4') },
+        { text: 'Bande annonce Big Buck Bunny 🐰', onPress: () => setVideoLocalPath('https://www.w3schools.com/html/movie.mp4') },
+        { text: 'Surf sur les vagues 🏄‍♂️', onPress: () => setVideoLocalPath('https://assets.mixkit.co/videos/preview/mixkit-surfing-in-ocean-at-sunset-1215-large.mp4') },
+      ]
+    );
+  };
+
+  const handleSaveDraft = async () => {
+    const userId = auth().currentUser?.uid;
+    if (!userId) {
+      Alert.alert('Connexion requise', 'Connecte-toi pour sauvegarder un brouillon.');
+      return;
+    }
+    setIsUploading(true);
+    try {
+      await firestore().collection('users').doc(userId).update({
+        draft: {
+          title,
+          description,
+          videoLocalPath,
+          createdAt: Date.now(),
+        }
+      });
+      Alert.alert('Brouillon sauvegardé !', 'Ton brouillon a été enregistré avec succès.');
+      setVideoLocalPath(null);
+      setTitle('');
+      setDescription('');
+    } catch (err) {
+      logger.error('Erreur sauvegarde brouillon :', err);
+      Alert.alert('Erreur', 'Impossible de sauvegarder le brouillon.');
+    } finally {
+      setIsUploading(false);
+    }
+  };
+
+  const handleAiRewrite = () => {
+    const baseText = title || description || 'vidéo';
+    const cleanText = baseText.trim().replace(/[#]/g, '');
+    const suggestions = [
+      `Regardez cette vidéo incroyable sur ${cleanText} ! 👀🔥 #tiktok #viral`,
+      `Je vous présente mon dernier projet sur ${cleanText} ! Dites-moi ce que vous en pensez en commentaire 👇 #reactnative #coding`,
+      `Incroyable rendu pour ${cleanText} ! Restez jusqu'à la fin 😱🚀 #fyp #clone`,
+    ];
+    Alert.alert(
+      "Réécrire avec l'IA 🧠✨",
+      "Sélectionne une suggestion générée par l'IA :",
+      [
+        { text: 'Annuler', style: 'cancel' },
+        { text: 'Suggestion 1 📝', onPress: () => setDescription(suggestions[0]) },
+        { text: 'Suggestion 2 📝', onPress: () => setDescription(suggestions[1]) },
+        { text: 'Suggestion 3 📝', onPress: () => setDescription(suggestions[2]) },
+      ]
+    );
+  };
 
   useEffect(() => {
     (async () => {
@@ -198,12 +325,14 @@ export default function CameraScreen(): React.JSX.Element {
 
             <TouchableOpacity
               style={styles.soundButton}
-              onPress={() => logger.debug('Ajouter un son')}
+              onPress={handleSelectSound}
               accessibilityRole="button"
               accessibilityLabel="Ajouter un son"
             >
               <Music color="#ffffff" size={20} strokeWidth={2.4} />
-              <Text style={styles.soundButtonText}>Ajouter un son</Text>
+              <Text style={styles.soundButtonText} numberOfLines={1}>
+                {selectedSound || 'Ajouter un son'}
+              </Text>
             </TouchableOpacity>
           </View>
 
@@ -234,7 +363,7 @@ export default function CameraScreen(): React.JSX.Element {
             <View style={styles.captureRow}>
               <TouchableOpacity
                 style={styles.galleryButton}
-                onPress={() => logger.debug('Ouvrir la galerie')}
+                onPress={handleSelectGalleryVideo}
                 accessibilityRole="button"
                 accessibilityLabel="Ouvrir la galerie"
               >
@@ -357,6 +486,7 @@ export default function CameraScreen(): React.JSX.Element {
               </TouchableOpacity>
               <TouchableOpacity
                 style={styles.aiButton}
+                onPress={handleAiRewrite}
                 accessibilityRole="button"
                 accessibilityLabel="Réécrire avec l'IA"
               >
@@ -397,7 +527,7 @@ export default function CameraScreen(): React.JSX.Element {
           <View style={styles.publishFooter}>
             <TouchableOpacity
               style={styles.draftButton}
-              onPress={() => logger.debug('Enregistrer en brouillon')}
+              onPress={handleSaveDraft}
               disabled={isUploading}
               accessibilityRole="button"
               accessibilityLabel="Enregistrer en brouillon"

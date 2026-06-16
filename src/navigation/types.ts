@@ -10,5 +10,5 @@ export type MainTabsParamList = {
   Friends: undefined;
   Create: undefined;
   Messages: undefined;
-  Profile: undefined;
+  Profile: { userId?: string } | undefined;
 };
