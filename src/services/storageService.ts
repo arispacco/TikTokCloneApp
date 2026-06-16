@@ -39,4 +39,21 @@ export const storageService = {
       return null;
     }
   },
+
+  /**
+   * Upload un fichier audio et retourne son URL publique.
+   */
+  uploadSound: async (
+    soundId: string,
+    filePath: string,
+  ): Promise<string | null> => {
+    try {
+      const reference = storage().ref(`/sounds/${soundId}.mp3`);
+      await reference.putFile(filePath);
+      return await reference.getDownloadURL();
+    } catch (error: unknown) {
+      logger.error('Erreur uploadSound :', error);
+      return null;
+    }
+  },
 };

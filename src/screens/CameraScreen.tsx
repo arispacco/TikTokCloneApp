@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import {
   View,
   Text,
@@ -88,7 +88,7 @@ export default function CameraScreen(): React.JSX.Element {
   // Nouveaux états interactifs
   const [selectedSound, setSelectedSound] = useState<string>('');
 
-  const clearDraftInDb = async (userId: string) => {
+  const clearDraftInDb = useCallback(async (userId: string) => {
     try {
       await firestore().collection('users').doc(userId).update({
         draft: null
@@ -96,9 +96,9 @@ export default function CameraScreen(): React.JSX.Element {
     } catch (err) {
       logger.error('Erreur effacement brouillon :', err);
     }
-  };
+  }, []);
 
-  const checkDraft = async () => {
+  const checkDraft = useCallback(async () => {
     const userId = auth().currentUser?.uid;
     if (!userId) return;
     try {
@@ -129,13 +129,13 @@ export default function CameraScreen(): React.JSX.Element {
     } catch (err) {
       logger.error('Erreur verification brouillon :', err);
     }
-  };
+  }, [clearDraftInDb]);
 
   useEffect(() => {
     if (isFocused) {
       checkDraft();
     }
-  }, [isFocused]);
+  }, [isFocused, checkDraft]);
 
   const handleSelectSound = () => {
     Alert.alert(

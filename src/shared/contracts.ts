@@ -45,3 +45,12 @@ export interface Comment {
   text: string;
   createdAt: number;
 }
+
+/** Son partagé utilisable en arrière-plan d'une vidéo. */
+export interface Sound {
+  id: string;
+  title: string;
+  url: string;
+  creatorId: string;
+  createdAt: number;
+}

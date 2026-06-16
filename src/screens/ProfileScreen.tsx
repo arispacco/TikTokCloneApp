@@ -8,12 +8,16 @@ import {
   Text,
   TouchableOpacity,
   View,
+  Image,
 } from 'react-native';
 import { ArrowLeft, Grid3X3, LogOut, Play, User as UserIcon } from 'lucide-react-native';
 import { useAuth } from '../hooks/useAuth';
 import { useRoute, useNavigation, RouteProp } from '@react-navigation/native';
+import { launchImageLibrary } from 'react-native-image-picker';
+import firestore from '@react-native-firebase/firestore';
 import { postService } from '../services/postService';
 import { authService } from '../services/authService';
+import { storageService } from '../services/storageService';
 import { Post, User } from '../shared/contracts';
 import { logger } from '../utils/logger';
 import { MainTabsParamList } from '../navigation/types';
@@ -89,6 +93,45 @@ export default function ProfileScreen(): React.JSX.Element {
     });
   };
 
+  const handleEditAvatar = async () => {
+    launchImageLibrary(
+      {
+        mediaType: 'photo',
+        quality: 0.8,
+      },
+      async response => {
+        if (response.didCancel) return;
+        if (response.errorCode) {
+          Alert.alert('Erreur', "Impossible de charger l'image.");
+          return;
+        }
+        if (response.assets && response.assets.length > 0) {
+          const uri = response.assets[0].uri;
+          if (!uri || !user?.uid) return;
+
+          setProfileLoading(true);
+          try {
+            const downloadUrl = await storageService.uploadAvatar(user.uid, uri);
+            if (downloadUrl) {
+              await firestore().collection('users').doc(user.uid).update({
+                avatarUrl: downloadUrl,
+              });
+              setProfileData(prev => prev ? { ...prev, avatarUrl: downloadUrl } : null);
+              Alert.alert('Succès', 'Photo de profil mise à jour !');
+            } else {
+              Alert.alert('Erreur', "Le téléversement de l'image a échoué.");
+            }
+          } catch (err) {
+            logger.error('Erreur édition avatar :', err);
+            Alert.alert('Erreur', 'Une erreur est survenue lors de la mise à jour.');
+          } finally {
+            setProfileLoading(false);
+          }
+        }
+      }
+    );
+  };
+
   const totalLikes = posts.reduce(
     (acc, post) => acc + (post.likesCount || 0),
     0,
@@ -133,12 +176,28 @@ export default function ProfileScreen(): React.JSX.Element {
               <Text style={styles.headerTitle}>Profil</Text>
             </View>
 
-            <View style={styles.avatar}>
-              <UserIcon color="#ffffff" size={54} strokeWidth={2.2} />
-            </View>
+            <TouchableOpacity
+              onPress={isOwnProfile ? handleEditAvatar : undefined}
+              activeOpacity={isOwnProfile ? 0.8 : 1}
+              accessibilityRole="button"
+              accessibilityLabel="Changer la photo de profil"
+            >
+              <View style={styles.avatar}>
+                {profileData?.avatarUrl && profileData.avatarUrl !== 'https://placeholder.com/avatar.png' ? (
+                  <Image source={{ uri: profileData.avatarUrl }} style={styles.avatarImage} />
+                ) : (
+                  <UserIcon color="#ffffff" size={54} strokeWidth={2.2} />
+                )}
+                {isOwnProfile && (
+                  <View style={styles.avatarEditBadge}>
+                    <Text style={styles.avatarEditBadgeText}>+</Text>
+                  </View>
+                )}
+              </View>
+            </TouchableOpacity>
 
             {profileLoading ? (
-              <ActivityIndicator color="#ff2d55" style={{ marginTop: 20 }} />
+              <ActivityIndicator color="#ff2d55" style={styles.loadingIndicatorTop} />
             ) : (
               <>
                 <Text style={styles.username}>
@@ -182,6 +241,7 @@ export default function ProfileScreen(): React.JSX.Element {
                 ) : (
                   <TouchableOpacity
                     style={styles.editButton}
+                    onPress={handleEditAvatar}
                     accessibilityRole="button"
                     accessibilityLabel="Modifier le profil"
                   >
@@ -236,6 +296,9 @@ export default function ProfileScreen(): React.JSX.Element {
 }
 
 const styles = StyleSheet.create({
+  loadingIndicatorTop: {
+    marginTop: 20,
+  },
   container: {
     flex: 1,
     backgroundColor: '#000000',
@@ -388,5 +451,29 @@ const styles = StyleSheet.create({
     color: '#ffffff',
     fontSize: 15,
     fontWeight: '700',
+  },
+  avatarImage: {
+    width: 96,
+    height: 96,
+    borderRadius: 48,
+  },
+  avatarEditBadge: {
+    position: 'absolute',
+    bottom: -2,
+    right: -2,
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    backgroundColor: '#ff2d55',
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 2,
+    borderColor: '#000000',
+  },
+  avatarEditBadgeText: {
+    color: '#ffffff',
+    fontSize: 16,
+    fontWeight: '900',
+    marginTop: -2,
   },
 });

@@ -54,3 +54,20 @@ jest.mock('@react-navigation/bottom-tabs', () => ({
     Screen: () => null,
   }),
 }));
+
+jest.mock('react-native-image-picker', () => ({
+  launchImageLibrary: jest.fn(),
+  launchCamera: jest.fn(),
+}));
+
+jest.mock('react-native-document-picker', () => ({
+  pick: jest.fn(),
+  pickSingle: jest.fn(),
+  types: {
+    audio: 'audio',
+    images: 'images',
+    video: 'video',
+    allFiles: 'allFiles',
+  },
+}));
+
