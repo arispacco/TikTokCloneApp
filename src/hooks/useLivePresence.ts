@@ -9,7 +9,6 @@ export function useLivePresence(liveId: string, isBroadcaster: boolean = false) 
   useEffect(() => {
     if (!liveId || !user) return;
 
-    const liveRef = database().ref(`/lives/${liveId}`);
     const viewersRef = database().ref(`/lives/${liveId}/viewers`);
     const myViewerRef = viewersRef.child(user.uid);
 

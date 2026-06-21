@@ -1,5 +1,5 @@
 import { useEffect, useState, useCallback } from 'react';
-import firestore, { FirebaseFirestoreTypes } from '@react-native-firebase/firestore';
+import firestore from '@react-native-firebase/firestore';
 import { useAuth } from './useAuth';
 
 export interface ChatMessage {

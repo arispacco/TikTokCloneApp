@@ -383,7 +383,7 @@ export default function FeedScreen(): React.JSX.Element {
         </View>
       );
     },
-    [activeIndex, activePostId, isFocused, handleLike, handleDoubleTapLike, handleShare, handleProfileNavigation, isSearching, searchQuery, activeTab, likedPosts],
+    [activeIndex, activePostId, isFocused, handleLike, handleDoubleTapLike, handleShare, handleProfileNavigation, handleJoinLive, isSearching, searchQuery, activeTab, likedPosts],
   );
 
   const handleCommentAdded = useCallback(() => {
