@@ -76,3 +76,35 @@ jest.mock('@react-native-documents/picker', () => ({
   isErrorWithCode: jest.fn(),
 }));
 
+jest.mock('react-native-agora', () => {
+  return {
+    createAgoraRtcEngine: jest.fn(() => ({
+      initialize: jest.fn(),
+      enableVideo: jest.fn(),
+      startPreview: jest.fn(),
+      joinChannel: jest.fn(),
+      leaveChannel: jest.fn(),
+      release: jest.fn(),
+      addListener: jest.fn(),
+    })),
+    ChannelProfileType: { ChannelProfileLiveBroadcasting: 0 },
+    ClientRoleType: { ClientRoleBroadcaster: 1, ClientRoleAudience: 2 },
+    RtcSurfaceView: 'RtcSurfaceView',
+  };
+});
+
+jest.mock('@react-native-firebase/database', () => {
+  return () => ({
+    ref: jest.fn(() => ({
+      child: jest.fn(() => ({
+        onDisconnect: jest.fn(() => ({
+          remove: jest.fn(),
+          set: jest.fn(),
+        })),
+        set: jest.fn(),
+      })),
+      on: jest.fn(),
+      off: jest.fn(),
+    })),
+  });
+});
