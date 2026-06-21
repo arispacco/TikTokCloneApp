@@ -10,6 +10,7 @@ import {
   ViewToken,
   TextInput,
   Share,
+  Alert,
 } from 'react-native';
 import auth from '@react-native-firebase/auth';
 import firestore from '@react-native-firebase/firestore';
@@ -246,6 +247,23 @@ export default function FeedScreen(): React.JSX.Element {
     navigation.navigate('Profile', { userId: creatorId });
   }, [navigation]);
 
+  const handleJoinLive = useCallback(async () => {
+    try {
+      const snapshot = await firestore().collection('lives').where('status', '==', 'live').limit(1).get();
+      if (!snapshot.empty) {
+        const liveData = snapshot.docs[0].data();
+        (navigation.getParent() as any)?.navigate('LiveViewer', {
+          liveId: snapshot.docs[0].id,
+          broadcasterName: liveData.broadcasterName
+        });
+      } else {
+        Alert.alert('Aucun Live', "Personne n'est en direct pour le moment.");
+      }
+    } catch (e) {
+      logger.error('Error fetching lives', e);
+    }
+  }, [navigation]);
+
   const filteredVideos = React.useMemo(() => {
     let list = videos;
     const currentUserId = auth().currentUser?.uid;
@@ -304,9 +322,11 @@ export default function FeedScreen(): React.JSX.Element {
               </View>
             ) : (
               <>
-                <View style={styles.livePill}>
-                  <Text style={styles.liveText}>LIVE</Text>
-                </View>
+                <TouchableOpacity onPress={handleJoinLive}>
+                  <View style={styles.livePill}>
+                    <Text style={styles.liveText}>LIVE</Text>
+                  </View>
+                </TouchableOpacity>
                 
                 <TouchableOpacity onPress={() => setActiveTab('suivis')}>
                   <View style={styles.tabContainer}>

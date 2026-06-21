@@ -406,7 +406,9 @@ export default function CameraScreen(): React.JSX.Element {
             </Text>
 
             <View style={styles.creationTabs}>
-              <Text style={styles.creationTab}>LIVE</Text>
+              <TouchableOpacity onPress={() => (navigation.getParent() as any)?.navigate('LiveBroadcast')}>
+                <Text style={styles.creationTab}>LIVE</Text>
+              </TouchableOpacity>
               <Text style={[styles.creationTab, styles.creationTabActive]}>
                 PUBLIER
               </Text>

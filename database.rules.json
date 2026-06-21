@@ -1,0 +1,8 @@
+{
+  "rules": {
+    "lives": {
+      ".read": "auth != null",
+      ".write": "auth != null"
+    }
+  }
+}

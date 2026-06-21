@@ -3,7 +3,7 @@ import { ActivityIndicator, StyleSheet, View } from 'react-native';
 import { NavigationContainer } from '@react-navigation/native';
 import { useAuth } from '../hooks/useAuth';
 import AuthStack from './AuthStack';
-import MainTabs from './MainTabs';
+import AppStack from './AppStack';
 
 /**
  * Garde de route racine : tant que l'état d'auth initial est inconnu on
@@ -23,7 +23,7 @@ export default function RootNavigator(): React.JSX.Element {
 
   return (
     <NavigationContainer>
-      {user ? <MainTabs /> : <AuthStack />}
+      {user ? <AppStack /> : <AuthStack />}
     </NavigationContainer>
   );
 }
